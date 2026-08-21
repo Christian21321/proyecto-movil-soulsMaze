@@ -1,6 +1,3 @@
-# proyecto-movil-soulsMaze
-proyecto semestral referente a la asignatura de especialización tecnologica 2
-
 #  SoulsMaze (nombre provisional)
 
 Juego de cartas PvP para Android, desarrollado como proyecto de la asignatura de Especialización en Tecnología.
