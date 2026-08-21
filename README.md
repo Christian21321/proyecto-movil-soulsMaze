@@ -4,7 +4,7 @@ Juego de cartas PvP para Android, desarrollado como proyecto de la asignatura de
 
 ##  Descripción
 
-CardClash es un juego de cartas *player vs player* en el que cada jugador construye su propio mazo con cartas de distintos tipos (ataque, defensa, curación y efectos especiales) y se enfrenta a un rival en combates por turnos hasta reducir la vida del avatar contrario a cero.
+SoulsMaze es un juego de cartas *player vs player* en el que cada jugador construye su propio mazo con cartas de distintos tipos (ataque, defensa, curación y efectos especiales) y se enfrenta a un rival en combates por turnos hasta reducir la vida del avatar contrario a cero.
 
 El elemento diferenciador del proyecto es el sistema de **efectos de estado basados en tiradas de dados** (congelación, quemadura, daño en el tiempo, sangrado, etc.), que introduce un componente de azar controlado sobre la estrategia de construcción de mazo.
 
