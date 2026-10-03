@@ -30,7 +30,7 @@ object CollectionMapper {
                     cardId = card.id,
                     name = card.name,
                     rarity = rarity,
-                    manaCost = rarity.manaCost,
+                    manaCost = card.cost,
                     copiesOwned = copies,
                     maxCopies = progress.maxCopiesAllowed,
                     canAdd = copies < progress.maxCopiesAllowed,

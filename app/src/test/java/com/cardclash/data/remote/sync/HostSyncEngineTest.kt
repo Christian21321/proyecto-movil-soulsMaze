@@ -221,7 +221,7 @@ class HostSyncEngineTest {
     private fun snapshotSinBeginTurn(): MatchSnapshot = initialSnapshot()
 
     /**
-     * Partida con mana reducido (1) y una carta de coste 2 (heal-0) en mano de
+     * Partida con mana reducido (1) y una carta de coste 2 (heal-1) en mano de
      * P1: fuerza un rechazo por "Mana insuficiente" SIN depender del turno no
      * iniciado (mana > 0). Solo [MatchFactory] puebla `cardOf`, que el motor
      * consulta para resolver el coste.
@@ -229,7 +229,7 @@ class HostSyncEngineTest {
     private fun snapshotManaInsuficienteConCartaEnMano(): MatchSnapshot {
         val eng = newEngine()
         val factory = MatchFactory(DefaultCardCatalog(), eng)
-        val deck = List(20) { CardId("heal-0") } // coste 2
+        val deck = List(20) { CardId("heal-1") } // coste 2
         val base = factory.newMatch(
             matchId = MatchId("M1"),
             players = listOf(P1(), P2()),

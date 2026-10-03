@@ -147,8 +147,8 @@ class DeckBuilderMapperTest {
 
         val curve = mapper.manaCurve(deck)
 
-        // attack-0/1/2 cuestan 1, 2 y 3; la pasiva no cuenta.
-        assertEquals(mapOf(1 to 1, 2 to 1, 3 to 1), curve.byCost)
-        assertEquals(1, curve.maxCount)
+        // attack-0/1 cuestan 1 y attack-2 cuesta 2; la pasiva no cuenta.
+        assertEquals(mapOf(1 to 2, 2 to 1), curve.byCost)
+        assertEquals(2, curve.maxCount)
     }
 }

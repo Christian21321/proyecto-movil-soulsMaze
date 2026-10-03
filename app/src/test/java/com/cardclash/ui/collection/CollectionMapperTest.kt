@@ -42,15 +42,15 @@ class CollectionMapperTest {
         assertEquals(Tier.T1, state.tier)
         assertEquals(2, state.maxCopiesAllowed)
 
-        // Coste de mana derivado de la rareza (convencion 3/4/5).
+        // El coste mostrado es el coste real de la carta; la rareza se deriva de el.
         val golpe = card(state, "attack-0")
         assertEquals("Golpe 0", golpe.name)
         assertEquals(Rarity.COMMON, golpe.rarity)
-        assertEquals(3, golpe.manaCost)
+        assertEquals(1, golpe.manaCost)
 
-        val veneno = card(state, "status-poison")
-        assertEquals(Rarity.SR, veneno.rarity)
-        assertEquals(4, veneno.manaCost)
+        val aura = card(state, "passive-max_mana-+2")
+        assertEquals(Rarity.SR, aura.rarity)
+        assertEquals(4, aura.manaCost)
 
         val escarcha = card(state, "status-frost")
         assertEquals(Rarity.SSR, escarcha.rarity)
