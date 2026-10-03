@@ -50,4 +50,37 @@ class DeckBuilderTest {
         assertTrue(nonPassive <= DeckBuilder.MAX_NON_PASSIVE)
         assertTrue(passive <= DeckBuilder.MAX_PASSIVE)
     }
+
+    // ---------------------------------------------------------------------
+    // battleDeck: mazo guardado vs mazo automático
+    // ---------------------------------------------------------------------
+
+    @Test
+    fun battleDeck_usaElMazoGuardadoSiEsLegalYPoseido() {
+        val saved = listOf("attack-0", "heal-1", "status-burn").map(::CardId)
+        val owned = cardIds("attack-0", "attack-1", "heal-1", "status-burn")
+        assertEquals(saved, DeckBuilder.battleDeck(saved, owned, catalog))
+    }
+
+    @Test
+    fun battleDeck_sinMazoGuardado_caeAlAutomatico() {
+        val owned = cardIds("attack-0", "attack-1")
+        assertEquals(DeckBuilder.buildDeck(owned, catalog), DeckBuilder.battleDeck(null, owned, catalog))
+        assertEquals(DeckBuilder.buildDeck(owned, catalog), DeckBuilder.battleDeck(emptyList(), owned, catalog))
+    }
+
+    @Test
+    fun battleDeck_conCartasNoPoseidas_caeAlAutomatico() {
+        val saved = listOf("attack-0", "attack-5").map(::CardId)
+        val owned = cardIds("attack-0")
+        assertEquals(DeckBuilder.buildDeck(owned, catalog), DeckBuilder.battleDeck(saved, owned, catalog))
+    }
+
+    @Test
+    fun battleDeck_ilegal_caeAlAutomatico() {
+        // Dos copias de la misma carta: DeckRuleService solo permite 1.
+        val saved = listOf("attack-0", "attack-0").map(::CardId)
+        val owned = cardIds("attack-0")
+        assertEquals(DeckBuilder.buildDeck(owned, catalog), DeckBuilder.battleDeck(saved, owned, catalog))
+    }
 }

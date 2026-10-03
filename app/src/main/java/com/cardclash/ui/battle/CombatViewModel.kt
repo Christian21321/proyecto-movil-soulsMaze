@@ -70,11 +70,17 @@ class CombatViewModel(
     }
 
     /**
-     * Construye el mazo actual del jugador desde la colección local
-     * ([PlayerProgressRepository.ownedCollection]) mediante [DeckBuilder] puro.
+     * Mazo con el que juega el jugador: el mazo activo del Deck Builder o, si no
+     * hay ninguno marcado, el último guardado ([PlayerProgressRepository.loadDecks]
+     * los ordena activo primero y luego por fecha). Si no hay mazo guardado o ya
+     * no es válido, [DeckBuilder.battleDeck] arma uno con la colección.
      */
-    suspend fun buildMyDeck(): List<CardId> =
-        DeckBuilder.buildDeck(repository.ownedCollection().ownedCards(), catalog)
+    suspend fun buildMyDeck(): List<CardId> {
+        val saved = repository.loadActiveDeck().getOrNull()
+            ?: repository.loadDecks().getOrNull()?.firstOrNull()
+        val savedCards = saved?.cardsBySlot?.map { it.cardId }
+        return DeckBuilder.battleDeck(savedCards, repository.ownedCollection().ownedCards(), catalog)
+    }
 
     /**
      * Anfitriona una partida EN LÍNEA con el mazo de la colección local.

@@ -6,6 +6,9 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** Turno global en el que la curva de mana de ambos jugadores ya llegó al tope 10. */
+private const val LATE_TURN = 21
+
 /**
  * Tests de las invariantes del MODELO de CardClash tras el rediseño de Fase 1
  * (avatar con vida, sin unidades de tablero).
@@ -196,6 +199,7 @@ class ModelInvariantsTest {
     fun snapshot_effectiveMaxMana_baseMasPasivasDelAvatar() {
         val p = P1()
         val s = baseSnapshot(passives = mapOf(p to listOf(PassiveBonus(UnitStat.MAX_MANA, 3))))
+            .copy(turn = LATE_TURN)
         // base 10 + pasiva 3 = 13 (solo importa la pasiva del avatar propio).
         assertEquals(13, s.effectiveMaxMana(p))
         assertEquals(10, s.effectiveMaxMana(P2()))
@@ -204,7 +208,7 @@ class ModelInvariantsTest {
     @Test
     fun snapshot_fillMana_respetaTopeEfectivo() {
         val p = P1()
-        val s = baseSnapshot().copy(manas = mapOf(p to 0, P2() to 0))
+        val s = baseSnapshot().copy(manas = mapOf(p to 0, P2() to 0), turn = LATE_TURN)
         val s2 = s.fillMana(p)
         assertEquals(10, s2.manaOf(p))
     }
@@ -213,9 +217,23 @@ class ModelInvariantsTest {
     fun snapshot_fillMana_respetaPasivas() {
         val p = P1()
         val s = baseSnapshot(passives = mapOf(p to listOf(PassiveBonus(UnitStat.MAX_MANA, 2))))
-            .copy(manas = mapOf(p to 0, P2() to 0))
+            .copy(manas = mapOf(p to 0, P2() to 0), turn = LATE_TURN)
         val s2 = s.fillMana(p)
         assertEquals(12, s2.manaOf(p))
+    }
+
+    @Test
+    fun manaCapFor_creceUnoPorTurnoPropioHasta10() {
+        val players = listOf(P1(), P2())
+        // Turnos globales 1..6 alternan P1, P2, P1, P2...
+        val p1 = (1..6).map { MatchSnapshot.manaCapFor(players, P1(), it, 10) }
+        val p2 = (1..6).map { MatchSnapshot.manaCapFor(players, P2(), it, 10) }
+        assertEquals(listOf(1, 1, 2, 2, 3, 3), p1)
+        assertEquals(listOf(0, 1, 1, 2, 2, 3), p2)
+        // Tope en baseMaxMana.
+        assertEquals(10, MatchSnapshot.manaCapFor(players, P1(), 99, 10))
+        // Jugador desconocido: 0.
+        assertEquals(0, MatchSnapshot.manaCapFor(players, PlayerId("X"), 5, 10))
     }
 
     @Test
