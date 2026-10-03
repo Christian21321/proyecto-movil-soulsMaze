@@ -2,10 +2,11 @@ package com.cardclash.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.getString
+import androidx.navigation.navArgument
 import com.cardclash.di.AppContainer
 import com.cardclash.ui.battle.BattleScreen
 import com.cardclash.ui.collection.CollectionScreen
@@ -60,12 +61,12 @@ fun AppNavHost(
         }
         composable(
             route = "${Routes.DECK_BUILDER}/{${Routes.ARG_DECK_ID}}",
-            arguments = listOf(androidx.navigation.navArgument(Routes.ARG_DECK_ID) { type = androidx.navigation.NavType.StringType }),
+            arguments = listOf(navArgument(Routes.ARG_DECK_ID) { type = NavType.StringType }),
         ) { backStackEntry ->
-            val deckId = backStackEntry.getString(Routes.ARG_DECK_ID)
             DeckBuilderScreen(
                 container = container,
                 navController = navController,
+                deckId = backStackEntry.arguments?.getString(Routes.ARG_DECK_ID),
             )
         }
         composable(Routes.DECK_BUILDER) {
