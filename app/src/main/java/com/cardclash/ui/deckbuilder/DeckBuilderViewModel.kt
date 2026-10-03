@@ -190,7 +190,10 @@ class DeckBuilderViewModel(
                 }
                 val domainDeck = DeckBuilderMapper.toDomain(current.deck)
                 val result = deckRepository.saveDeck(domainDeck)
-                result.onSuccess {
+                result.onSuccess { saved ->
+                    // El último mazo guardado pasa a ser el activo: es con el
+                    // que se entra al combate.
+                    deckRepository.setActiveDeck(saved.id)
                     _messages.trySend("Guardado")
                     _uiState.value = DeckBuilderUiState.Saved()
                 }.onFailure { error ->

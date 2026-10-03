@@ -141,7 +141,8 @@ object CombatReducer {
             myId = myId,
             isMyTurn = projection.currentPlayer == myId,
             myMana = myMana,
-            maxMana = effectiveMaxMana(projection.passives[myId].orEmpty()),
+            maxMana = MatchSnapshot.manaCapFor(projection.players, myId, projection.turn, BASE_MAX_MANA) +
+                passiveManaBonus(projection.passives[myId].orEmpty()),
             myHand = myHand,
             myHeroHealth = projection.heroHealth[myId] ?: 0,
             myHeroMaxHealth = projection.heroMaxHealth[myId] ?: 0,
@@ -161,9 +162,9 @@ object CombatReducer {
     private fun isFrosted(statuses: List<StatusType>): Boolean =
         statuses.any { it == StatusType.FROST }
 
-    /** Tope de mana efectivo: base 10 + suma de pasivas MAX_MANA del avatar. */
-    private fun effectiveMaxMana(passives: List<PassiveBonus>): Int =
-        BASE_MAX_MANA + passives.sumOf { bonus ->
+    /** Suma de las pasivas MAX_MANA del avatar (se añade al tope creciente). */
+    private fun passiveManaBonus(passives: List<PassiveBonus>): Int =
+        passives.sumOf { bonus ->
             if (bonus.stat == UnitStat.MAX_MANA) bonus.amount else 0
         }
 }

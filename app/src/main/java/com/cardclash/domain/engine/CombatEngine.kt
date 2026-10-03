@@ -55,7 +55,8 @@ import com.cardclash.domain.repository.CardCatalog
  *   estados TIMED pierden 1 turno en cada fin de turno de su portador y expiran
  *   al llegar a 0.
  * - Ticks de estados sobre el avatar: BURN/POISON fijos, BLEED 1d3 con el roller.
- * - Mana relleno a [MatchSnapshot.effectiveMaxMana] (base 10 + pasivas MAX_MANA).
+ * - Mana relleno a [MatchSnapshot.effectiveMaxMana]: curva creciente (1 en el
+ *   primer turno propio, +1 por turno hasta 10) + pasivas MAX_MANA.
  * - Curación con tope en la vida máxima del avatar.
  */
 class CombatEngine(
@@ -172,7 +173,7 @@ class CombatEngine(
             )
         }
 
-        // 1) Relleno de mana hasta el tope efectivo (base 10 + pasivas MAX_MANA).
+        // 1) Relleno de mana hasta el tope efectivo (curva 1..10 + pasivas MAX_MANA).
         //    Los estados NO se refrescan aquí: solo expiran (ver endTurn).
         val withMana = snapshot.fillMana(player)
 

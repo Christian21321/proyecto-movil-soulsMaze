@@ -23,6 +23,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** Turno global en el que la curva de mana de ambos jugadores ya llegó al tope 10. */
+private const val LATE_TURN = 21
+
 /**
  * Tests del motor de combate con [SeededDiceRoller] (determinista) del rediseño
  * de Fase 1: avatar con vida (sin tableros de unidades).
@@ -240,8 +243,9 @@ class CombatEngineTest {
         val s0 = snapshot(current = p)
             .copy(decks = mapOf(p to List(10) { inst("c$it") }), fullDecks = mapOf(p to List(10) { inst("c$it") }))
         val s1 = engine.applyAction(s0, CombatEngine.CombatAction.BeginTurn).snapshot
-        // Mana rellenado a 10 y mano llena a 4 (0 inicial + 4 robadas).
-        assertEquals(10, s1.manaOf(p))
+        // Mana rellenado a 1 (primer turno, curva creciente) y mano llena a 4
+        // (0 inicial + 4 robadas).
+        assertEquals(1, s1.manaOf(p))
         assertEquals(4, s1.handOf(p).size)
     }
 
@@ -588,6 +592,22 @@ class CombatEngineTest {
     // 12) Pasivas de mana: elevan el tope efectivo.
     // =====================================================================
     @Test
+    fun curvaDeMana_cadaJugadorEmpiezaEn1YSubeUnoPorTurnoPropio() {
+        val engine = CombatEngine(catalog(), SeededDiceRoller(1))
+        var s = snapshot(current = P1(), manas = mapOf(P1() to 0, P2() to 0))
+        val manaAlEmpezar = mutableListOf<Pair<PlayerId, Int>>()
+        repeat(6) {
+            s = engine.applyAction(s, CombatEngine.CombatAction.BeginTurn).snapshot
+            manaAlEmpezar += s.currentPlayer to s.manaOf(s.currentPlayer)
+            s = engine.applyAction(s, CombatEngine.CombatAction.EndTurn).snapshot
+        }
+        assertEquals(
+            listOf(P1() to 1, P2() to 1, P1() to 2, P2() to 2, P1() to 3, P2() to 3),
+            manaAlEmpezar,
+        )
+    }
+
+    @Test
     fun pasivaDeMana_aumentaTopeEfectivo() {
         val engine = CombatEngine(catalog(), SeededDiceRoller(1))
         val p = P1()
@@ -595,7 +615,7 @@ class CombatEngineTest {
             current = p,
             hands = mapOf(p to listOf(inst("mana"))),
             cardOf = mapOf(inst("mana") to CardId("mana")),
-        )
+        ).copy(turn = LATE_TURN)
         val s1 = engine.applyAction(s0, CombatEngine.CombatAction.PlayCard(inst("mana"))).snapshot
         // La pasiva queda vinculada al avatar: +2 MAX_MANA -> tope 12.
         assertEquals(1, s1.passivesOf(p).size)

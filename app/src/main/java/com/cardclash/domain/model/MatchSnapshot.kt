@@ -25,9 +25,12 @@ package com.cardclash.domain.model
  * - [playedCardLastTurn]: mapa que guarda, por jugador, si jugó una carta en su
  *   turno anterior (afecta al robo del turno siguiente).
  *
- * Nota sobre el mana: el "tope efectivo" de cada jugador es [baseMaxMana] (10)
- * más la suma de las pasivas MAX_MANA vinculadas a su avatar ([passives]). El
- * motor rellena el mana hasta ese tope efectivo al iniciar el turno.
+ * Nota sobre el mana (curva creciente): el tope de cada jugador es el número de
+ * turnos propios que ha empezado, hasta [baseMaxMana] (10): 1 en su primer
+ * turno, 2 en el segundo... Se deriva de [turn] y del orden de [players]
+ * ([manaCapFor]), así que no necesita estado extra. A ese tope se suman las
+ * pasivas MAX_MANA del avatar ([passives]) y el motor rellena el mana hasta el
+ * resultado ([effectiveMaxMana]) al iniciar el turno.
  */
 data class MatchSnapshot(
     val matchId: MatchId,
@@ -79,6 +82,23 @@ data class MatchSnapshot(
         fun heroMaxHealthForLevel(level: Int): Int {
             require(level >= 1) { "El nivel del avatar debe ser >= 1" }
             return 25 + 5 * level
+        }
+
+        /**
+         * Tope de mana base de [player] en el turno global [turn]: el número de
+         * turnos propios empezados hasta ahora (1, 2, 3...) limitado a
+         * [baseMaxMana]. Los turnos globales alternan en el orden de [players]
+         * empezando en 1, de modo que el jugador en la posición `i` juega sus
+         * turnos en `i + 1`, `i + 1 + n`, ... con `n = players.size`.
+         *
+         * Es pública para que el cliente (que solo recibe una proyección)
+         * calcule el mismo valor que el host.
+         */
+        fun manaCapFor(players: List<PlayerId>, player: PlayerId, turn: Int, baseMaxMana: Int): Int {
+            val index = players.indexOf(player)
+            if (index < 0 || players.isEmpty()) return 0
+            val ownTurnsStarted = if (turn <= index) 0 else (turn - index - 1) / players.size + 1
+            return ownTurnsStarted.coerceIn(0, baseMaxMana)
         }
     }
 
@@ -151,15 +171,16 @@ data class MatchSnapshot(
     }
 
     /**
-     * Tope efectivo de mana de un jugador: [baseMaxMana] más la suma de las
-     * pasivas MAX_MANA vinculadas a su avatar ([passives]). Es el valor al que se
-     * rellena el mana al iniciar (o continuar) el turno salvo que esté congelado.
+     * Tope efectivo de mana de un jugador: el tope creciente del turno actual
+     * ([manaCapFor], de 1 a [baseMaxMana]) más la suma de las pasivas MAX_MANA
+     * vinculadas a su avatar ([passives]). Es el valor al que se rellena el mana
+     * al iniciar el turno salvo que esté congelado.
      */
     fun effectiveMaxMana(player: PlayerId): Int {
         val passiveBonus = passivesOf(player).sumOf { bonus ->
             if (bonus.stat == UnitStat.MAX_MANA) bonus.amount else 0
         }
-        return baseMaxMana + passiveBonus
+        return manaCapFor(players, player, turn, baseMaxMana) + passiveBonus
     }
 
     /** Devuelve true si [player] es el jugador cuyo turno es. */
