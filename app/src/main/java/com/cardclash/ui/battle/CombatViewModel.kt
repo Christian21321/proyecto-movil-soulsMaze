@@ -45,7 +45,7 @@ class CombatViewModel(
 
     private val controller = MatchSessionController(
         myId = myId,
-        engine = MatchSessionController.demoEngine(),
+        engine = MatchSessionController.productionEngine(catalog),
         catalog = catalog,
         gateway = sessionGateway,
         resultSink = resultSink,

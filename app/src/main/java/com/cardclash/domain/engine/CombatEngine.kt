@@ -26,7 +26,8 @@ import com.cardclash.domain.repository.CardCatalog
  *   estado.
  * - La aleatoriedad se inyecta por [DiceRoller]; el motor JAMÁS crea un `Random`
  *   interno. Con [KotlinRandomDiceRoller] en producción y [SeededDiceRoller]
- *   (determinista) en tests (para BLEED 1d3).
+ *   (determinista) en tests. El roller decide las tiradas de BLEED (1d3), el
+ *   barajado inicial de los mazos y el re-barajado del mazo circular.
  * - Las reglas de juego están separadas en pasos bien localizados: inicio de
  *   turno, robo, relleno de mana, juego de carta, fin de turno, victoria.
  *
@@ -49,7 +50,10 @@ import com.cardclash.domain.repository.CardCatalog
  * # Reglas de estados
  * - FROST salta el turno completo (no roba ni rellena mana).
  * - FROST NEUTRALIZA BURN vía [StatusInteractionRegistry].
- * - Refresco de estados: al reaparecer, `turnsRemaining = durationTurns`.
+ * - Refresco de estados: al volver a APLICAR un estado que ya existe,
+ *   `turnsRemaining = durationTurns`. El inicio de turno no refresca nada: los
+ *   estados TIMED pierden 1 turno en cada fin de turno de su portador y expiran
+ *   al llegar a 0.
  * - Ticks de estados sobre el avatar: BURN/POISON fijos, BLEED 1d3 con el roller.
  * - Mana relleno a [MatchSnapshot.effectiveMaxMana] (base 10 + pasivas MAX_MANA).
  * - Curación con tope en la vida máxima del avatar.
@@ -59,8 +63,6 @@ class CombatEngine(
     private val catalog: CardCatalog,
     /** Fuente de aleatoriedad (inyectable; ver [DiceRoller]). */
     private val diceRoller: DiceRoller,
-    /** Constante: semilla por defecto para el re-barajado del mazo. */
-    private val defaultDeckSeed: Long = 42L,
 ) {
     /** Tope máximo de cartas en mano (regla autorizada del rediseño). */
     companion object {
@@ -104,14 +106,17 @@ class CombatEngine(
         }
 
     /**
-     * Crea un snapshot inicial para una partida entre [players], robusto y
-     * determinista: mano con las primeras cartas del mazo (sin azar), mana 0,
+     * Crea un snapshot inicial para una partida entre [players]: cada mazo se
+     * baraja con el [DiceRoller] (salvo `shuffleDecks = false`) y la mano inicial
+     * son las primeras cartas del mazo resultante, mana 0,
      * vida de cada avatar según su nivel (por defecto 1 -> 30), fase PLAYING y
      * turno 1 con el primer jugador como actual.
      *
      * @param heroLevelByPlayer nivel del avatar de cada jugador (opcional; por
      *   defecto [MatchSnapshot.DEFAULT_HERO_LEVEL] -> 30 de vida máxima).
      * @param initialHandSize tamaño inicial de la mano (por defecto 3).
+     * @param shuffleDecks si es true (por defecto) baraja cada mazo antes de
+     *   repartir; false conserva el orden recibido (útil en tests).
      */
     fun newMatch(
         matchId: MatchId,
@@ -119,8 +124,14 @@ class CombatEngine(
         deckByPlayer: Map<PlayerId, List<InstanceId>>,
         heroLevelByPlayer: Map<PlayerId, Int> = emptyMap(),
         initialHandSize: Int = DEFAULT_INITIAL_HAND_SIZE,
+        shuffleDecks: Boolean = true,
     ): MatchSnapshot {
         require(players.size >= 2) { "Una partida requiere al menos 2 jugadores" }
+
+        val orderedDecks = players.associateWith { player ->
+            val deck = deckByPlayer[player].orEmpty()
+            if (shuffleDecks) diceRoller.shuffle(deck) else deck
+        }
 
         val heroMax = players.associateWith { player ->
             val level = heroLevelByPlayer[player] ?: MatchSnapshot.DEFAULT_HERO_LEVEL
@@ -133,15 +144,9 @@ class CombatEngine(
             turn = 1,
             currentPlayer = players.first(),
             players = players,
-            hands = players.associateWith {
-                deckByPlayer[it].orEmpty().take(initialHandSize)
-            },
-            decks = players.associateWith { player ->
-                deckByPlayer[player].orEmpty().drop(initialHandSize)
-            },
-            fullDecks = players.associateWith { player ->
-                deckByPlayer[player].orEmpty()
-            },
+            hands = players.associateWith { orderedDecks.getValue(it).take(initialHandSize) },
+            decks = players.associateWith { orderedDecks.getValue(it).drop(initialHandSize) },
+            fullDecks = orderedDecks,
             heroHealth = heroMax,
             heroMaxHealth = heroMax,
             heroStatuses = players.associateWith { emptyList<ActiveStatus>() },
@@ -167,21 +172,18 @@ class CombatEngine(
             )
         }
 
-        // 1) Refresco de estados del avatar: se reaplica duración (TIMED).
-        val refreshed = refreshHeroStatuses(snapshot, player)
+        // 1) Relleno de mana hasta el tope efectivo (base 10 + pasivas MAX_MANA).
+        //    Los estados NO se refrescan aquí: solo expiran (ver endTurn).
+        val withMana = snapshot.fillMana(player)
 
-        // 2) Relleno de mana hasta el tope efectivo (base 10 + pasivas MAX_MANA).
-        val withMana = refreshed.fillMana(player)
-
-        // 3) Robo con tope de mano 4: se rellena hasta 4 en total. Si la mano ya
+        // 2) Robo con tope de mano 4: se rellena hasta 4 en total. Si la mano ya
         //    tiene 4 (por no haber jugado cartas), no se roba nada (robo detenido).
         val currentHand = withMana.handOf(player)
         val toDraw = (MAX_HAND_SIZE - currentHand.size).coerceAtLeast(0)
         val (drawn, restQueue) = withMana.drawCards(
             player = player,
             target = toDraw,
-            seed = defaultDeckSeed,
-            reshuffleImpl = ::reshuffleDeck,
+            reshuffleImpl = diceRoller::shuffle,
         )
         val newHand = currentHand + drawn
         val finalSnap = withMana.copy(
@@ -289,14 +291,6 @@ class CombatEngine(
     private fun opponentOf(snapshot: MatchSnapshot, player: PlayerId): PlayerId =
         snapshot.players.first { it != player }
 
-    /** Reaplica la duración completa a los estados del avatar con decaimiento TIMED. */
-    private fun refreshHeroStatuses(snapshot: MatchSnapshot, player: PlayerId): MatchSnapshot {
-        val statuses = snapshot.heroStatusesOf(player).map { st ->
-            if (st.decay == StatusDecay.TIMED) st.copy(turnsRemaining = st.durationTurns) else st
-        }
-        return snapshot.copy(heroStatuses = snapshot.heroStatuses + (player to statuses))
-    }
-
     /**
      * Aplica el "tick" de los estados del avatar de [player].
      * BURN/POISON: daño fijo; BLEED: 1d3 con el roller. La vida del avatar se
@@ -376,8 +370,7 @@ class CombatEngine(
                 val (drawn, restQueue) = working.drawCards(
                     player = player,
                     target = toDraw.coerceAtMost(e.count),
-                    seed = defaultDeckSeed,
-                    reshuffleImpl = ::reshuffleDeck,
+                    reshuffleImpl = diceRoller::shuffle,
                 )
                 working = working.copy(
                     hands = working.hands + (player to currentHand + drawn),
@@ -458,23 +451,6 @@ class CombatEngine(
             heroStatuses = snapshot.heroStatuses + (player to statuses),
             log = snapshot.log + "$player recibe el estado ${status.name}.",
         )
-    }
-
-    // ---------------------------------------------------------------------
-    // Mazo circular y re-barajado
-    // ---------------------------------------------------------------------
-
-    /**
-     * Re-baraja la pila completa de instancias (determinista si la semilla es
-     * fija). El resultado depende de la semilla, de modo que un [SeededDiceRoller]
-     * no influye aquí directamente pero la semilla por defecto es estable.
-     */
-    private fun reshuffleDeck(
-        instances: List<InstanceId>,
-        seed: Long,
-    ): List<InstanceId> {
-        val random = kotlin.random.Random(seed)
-        return instances.shuffled(random)
     }
 
     // ---------------------------------------------------------------------

@@ -18,6 +18,22 @@ interface DiceRoller {
 
     /** Conveniencia: lanza un dado de [sides] caras (1..[sides]). */
     fun d(sides: Int): Int = nextInt(1, sides)
+
+    /**
+     * Devuelve una copia barajada de [items] (Fisher-Yates) usando esta misma
+     * fuente de aleatoriedad: determinista con [SeededDiceRoller] y aleatoria
+     * con [KotlinRandomDiceRoller]. No muta la lista de entrada.
+     */
+    fun <T> shuffle(items: List<T>): List<T> {
+        val result = items.toMutableList()
+        for (i in result.lastIndex downTo 1) {
+            val j = nextInt(0, i)
+            val tmp = result[i]
+            result[i] = result[j]
+            result[j] = tmp
+        }
+        return result
+    }
 }
 
 /**

@@ -9,6 +9,7 @@ import com.cardclash.data.remote.sync.HostSyncState
 import com.cardclash.data.remote.sync.MatchAction
 import com.cardclash.domain.engine.CombatEngine
 import com.cardclash.domain.engine.DefaultCardCatalog
+import com.cardclash.domain.engine.KotlinRandomDiceRoller
 import com.cardclash.domain.engine.SeededDiceRoller
 import com.cardclash.domain.model.CardEffect
 import com.cardclash.domain.model.CardId
@@ -543,8 +544,15 @@ class MatchSessionController(
         )
 
         /**
-         * Constructor de conveniencia con motor por defecto (catálogo real +
-         * dice determinista) para la demo y pruebas.
+         * Motor para partidas reales: catálogo por defecto + dados aleatorios
+         * ([KotlinRandomDiceRoller]). Cada partida baraja y tira distinto.
+         */
+        fun productionEngine(catalog: CardCatalog = DefaultCardCatalog()): CombatEngine =
+            CombatEngine(catalog, KotlinRandomDiceRoller())
+
+        /**
+         * Motor DETERMINISTA (semilla fija) para tests reproducibles. No usar en
+         * la app: todas las partidas serían idénticas.
          */
         fun demoEngine(): CombatEngine =
             CombatEngine(DefaultCardCatalog(), SeededDiceRoller(42))

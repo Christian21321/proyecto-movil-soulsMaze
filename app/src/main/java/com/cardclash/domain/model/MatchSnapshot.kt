@@ -114,8 +114,12 @@ data class MatchSnapshot(
 
     /**
      * Cartas disponibles para robar (hasta [target]). El mazo es CIRCULAR: si la
-     * cola actual se agota, se re-baraja la pila ORIGINAL ([fullDecks]) con la
-     * semilla [seed] y se reanuda la entrega.
+     * cola actual se agota, se re-baraja la pila ORIGINAL ([fullDecks]) con
+     * [reshuffleImpl] y se reanuda la entrega.
+     *
+     * El re-barajado excluye las instancias que ya están en la mano y las que se
+     * acaban de robar en esta misma llamada, de modo que una instancia nunca
+     * aparece dos veces en la mano.
      *
      * Devuelve el par (cartas robadas, cola restante). Nunca lanza: si incluso el
      * mazo original está vacío, simplemente no aporta más cartas.
@@ -123,13 +127,10 @@ data class MatchSnapshot(
     fun drawCards(
         player: PlayerId,
         target: Int,
-        seed: Long,
-        reshuffleImpl: (List<InstanceId>, Long) -> List<InstanceId>,
+        reshuffleImpl: (List<InstanceId>) -> List<InstanceId>,
     ): Pair<List<InstanceId>, List<InstanceId>> {
         var queue = deckOf(player)
         val drawn = mutableListOf<InstanceId>()
-        // Instancias que YA están en la mano del jugador: el re-barajado del mazo
-        // original JAMÁS debe volver a entregarlas (evita duplicados reales).
         val inHand = handOf(player).toSet()
         var guard = 0
         val safeGuard = 10_000
@@ -137,10 +138,10 @@ data class MatchSnapshot(
             guard++
             if (queue.isEmpty()) {
                 // Re-baraja la pila ORIGINAL (fuente circular), nunca la cola agotada.
-                // Excluye las instancias que ya están en mano para no re-robarlas.
-                val source = fullDecks[player].orEmpty().filterNot { it in inHand }
+                // Excluye lo que ya está en mano y lo robado en este mismo robo.
+                val source = fullDecks[player].orEmpty().filterNot { it in inHand || it in drawn }
                 if (source.isEmpty()) break
-                queue = reshuffleImpl(source, seed)
+                queue = reshuffleImpl(source)
             }
             if (queue.isEmpty()) break
             drawn += queue.first()

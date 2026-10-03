@@ -219,21 +219,34 @@ class ModelInvariantsTest {
     }
 
     @Test
-    fun snapshot_drawCards_circular() {
+    fun snapshot_drawCards_circular_sinDuplicados() {
         val p = P1()
         val full = listOf(InstanceId("a"), InstanceId("b"))
         val s = baseSnapshot().copy(
             decks = mapOf(p to full),
             fullDecks = mapOf(p to full),
         )
-        // Robar 5 de un mazo de 2: el mazo se re-baraja (circular) para completar.
-        val (drawn, rest) = s.drawCards(p, 5, seed = 1L) { instances, seed ->
-            instances.shuffled(kotlin.random.Random(seed))
-        }
-        assertEquals(5, drawn.size)
-        // Tras robar 5 de una fuente de 2 que cicla, la cola restante conserva
-        // exactamente una carta (la que no llegó a entregarse).
-        assertEquals(1, rest.size)
+        // Robar 5 de un mazo de 2: el re-barajado no puede volver a entregar las
+        // instancias ya robadas, así que solo salen las 2 existentes.
+        val (drawn, rest) = s.drawCards(p, 5) { it.reversed() }
+        assertEquals(listOf(InstanceId("a"), InstanceId("b")), drawn)
+        assertTrue(rest.isEmpty())
+    }
+
+    @Test
+    fun snapshot_drawCards_rebarajadoAMitadDeRobo_noRepiteInstancias() {
+        val p = P1()
+        val full = listOf(InstanceId("a"), InstanceId("b"), InstanceId("c"))
+        // Queda solo "a" en la cola: robar 3 obliga a re-barajar a mitad del robo.
+        val s = baseSnapshot().copy(
+            hands = mapOf(p to emptyList()),
+            decks = mapOf(p to listOf(InstanceId("a"))),
+            fullDecks = mapOf(p to full),
+        )
+        // El re-barajado "a la contra" pondría "a" primero si no se excluyera.
+        val (drawn, _) = s.drawCards(p, 3) { it.sortedBy { inst -> inst.value } }
+        assertEquals(3, drawn.size)
+        assertEquals(drawn.size, drawn.toSet().size)
     }
 
     /** Verificación extra de que un dato sano es aceptado sin error. */

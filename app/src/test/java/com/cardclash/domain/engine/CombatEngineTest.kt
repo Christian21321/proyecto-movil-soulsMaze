@@ -190,6 +190,46 @@ class CombatEngineTest {
         assertEquals(50, s.heroMaxHealthOf(P2()))
     }
 
+    @Test
+    fun newMatch_barajaElMazoConElDiceRoller() {
+        val deck = List(12) { inst("c$it") }
+        fun dealt(seed: Long) = CombatEngine(catalog(), SeededDiceRoller(seed)).newMatch(
+            matchId = MatchId("M"),
+            players = listOf(P1(), P2()),
+            deckByPlayer = mapOf(P1() to deck, P2() to deck),
+        )
+        val a = dealt(1)
+        // Barajar conserva exactamente las mismas instancias (mano + mazo).
+        assertEquals(deck.toSet(), (a.handOf(P1()) + a.deckOf(P1())).toSet())
+        assertEquals(deck.size, a.fullDecks.getValue(P1()).size)
+        // Misma semilla => mismo reparto; el orden ya no es el del mazo recibido.
+        assertEquals(a.fullDecks, dealt(1).fullDecks)
+        assertTrue(a.fullDecks.getValue(P1()) != deck)
+        // Semillas distintas => repartos distintos.
+        assertTrue(a.fullDecks.getValue(P1()) != dealt(2).fullDecks.getValue(P1()))
+    }
+
+    @Test
+    fun newMatch_sinBarajar_conservaElOrden() {
+        val deck = List(6) { inst("c$it") }
+        val s = CombatEngine(catalog(), SeededDiceRoller(1)).newMatch(
+            matchId = MatchId("M"),
+            players = listOf(P1(), P2()),
+            deckByPlayer = mapOf(P1() to deck, P2() to deck),
+            shuffleDecks = false,
+        )
+        assertEquals(deck.take(3), s.handOf(P1()))
+    }
+
+    @Test
+    fun diceRoller_shuffle_esPermutacionYNoMutaLaEntrada() {
+        val items = (1..20).toList()
+        val shuffled = SeededDiceRoller(3).shuffle(items)
+        assertEquals((1..20).toList(), items)
+        assertEquals(items.sorted(), shuffled.sorted())
+        assertTrue(shuffled != items)
+    }
+
     // =====================================================================
     // 2) Robo con tope de mano: rellena hasta 4; a mano llena no roba.
     // =====================================================================
@@ -287,10 +327,10 @@ class CombatEngineTest {
     }
 
     // =====================================================================
-    // 6) Refresco de estados: turnsRemaining = durationTurns.
+    // 6) Duración de estados: BeginTurn NO refresca; los estados expiran.
     // =====================================================================
     @Test
-    fun refreshEstados_reaplicaDuracionCompleta() {
+    fun beginTurn_noRefrescaDuracionDeEstados() {
         val engine = CombatEngine(catalog(), SeededDiceRoller(1))
         val p = P1()
         val casiAgotado = ActiveStatus(
@@ -300,8 +340,34 @@ class CombatEngineTest {
         )
         val s0 = snapshot(current = p, heroStatuses = mapOf(p to listOf(casiAgotado)))
         val s1 = engine.applyAction(s0, CombatEngine.CombatAction.BeginTurn).snapshot
-        val refreshed = s1.heroStatusesOf(p).first { it.type == StatusType.BURN }
-        assertEquals(2, refreshed.turnsRemaining)
+        assertEquals(1, s1.heroStatusesOf(p).first { it.type == StatusType.BURN }.turnsRemaining)
+    }
+
+    @Test
+    fun estadoTimed_expiraTrasSuDuracionEnTurnosDelPortador() {
+        val engine = CombatEngine(catalog(), SeededDiceRoller(1))
+        val p = P1()
+        val o = P2()
+        var s = snapshot(
+            current = p,
+            heroHealth = mapOf(p to 30, o to 30),
+            heroStatuses = mapOf(p to listOf(heroStatus(p, StatusType.BURN))),
+        )
+        // Dos turnos completos de P1 (con el turno de P2 en medio): BURN (duración
+        // 2) hace 2 de daño en cada uno y después desaparece.
+        repeat(2) {
+            s = engine.applyAction(s, CombatEngine.CombatAction.BeginTurn).snapshot
+            s = engine.applyAction(s, CombatEngine.CombatAction.EndTurn).snapshot
+            s = engine.applyAction(s, CombatEngine.CombatAction.BeginTurn).snapshot
+            s = engine.applyAction(s, CombatEngine.CombatAction.EndTurn).snapshot
+        }
+        assertTrue(s.heroStatusesOf(p).none { it.type == StatusType.BURN })
+        assertEquals(26, s.heroHealthOf(p))
+
+        // Un turno más de P1 ya no aplica daño.
+        s = engine.applyAction(s, CombatEngine.CombatAction.BeginTurn).snapshot
+        s = engine.applyAction(s, CombatEngine.CombatAction.EndTurn).snapshot
+        assertEquals(26, s.heroHealthOf(p))
     }
 
     // =====================================================================
