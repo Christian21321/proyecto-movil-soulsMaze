@@ -36,10 +36,14 @@ class DefaultCardCatalog : CardCatalog {
         addAll(List(3) { i -> baseDraw(i) })
 
         // --- Cartas de estados (una por tipo) ---
-        add(statusCard(StatusType.BURN, cost = 3))
-        add(statusCard(StatusType.POISON, cost = 4))
-        add(statusCard(StatusType.BLEED, cost = 3))
-        add(statusCard(StatusType.FROST, cost = 5))
+        // Los estados de daño duran 2 turnos (BURN 2x2=4, POISON 3x2=6, BLEED
+        // 1d3x2 ~4) y cuestan como un ataque directo de daño parecido. FROST
+        // dura 1 turno: el rival salta un turno y juega el siguiente, de modo
+        // que no se puede encadenar un bloqueo permanente.
+        add(statusCard(StatusType.BURN, cost = 2))
+        add(statusCard(StatusType.POISON, cost = 3))
+        add(statusCard(StatusType.BLEED, cost = 2))
+        add(statusCard(StatusType.FROST, cost = 5, durationTurns = FROST_DURATION_TURNS))
 
         // --- Cartas pasivas de mana ---
         add(passiveCard(UnitStat.MAX_MANA, amount = +2, cost = 4))
@@ -65,44 +69,51 @@ class DefaultCardCatalog : CardCatalog {
      * Carta de ataque base genérica: inflige [CardEffect.Attack] directo al
      * avatar rival. [attack]/[maxHealth] se conservan por compatibilidad pero ya
      * no representan una unidad en tablero.
+     *
+     * Coste proporcional al daño: daño = 2 x coste + 1 o + 2 (coste 1 -> 3-4,
+     * coste 2 -> 5-6, coste 3 -> 7-8).
      */
     private fun baseAttack(i: Int): Card = Card(
         id = CardId("attack-$i"),
         name = "Golpe $i",
-        cost = 1 + (i % 3),
+        cost = 1 + i / 2,
         attack = 3 + i,
         maxHealth = 4 + i,
         effect = CardEffect.Attack(amount = 3 + i),
     )
 
-    /** Carta de curación base genérica: cura el avatar objetivo. */
+    /** Carta de curación base genérica: cura el avatar objetivo (4 por 1, 5-6 por 2). */
     private fun baseHeal(i: Int): Card = Card(
         id = CardId("heal-$i"),
         name = "Poción $i",
-        cost = 2,
+        cost = 1 + (i + 1) / 2,
         attack = 1,
         maxHealth = 3,
         effect = CardEffect.Heal(amount = 4 + i),
     )
 
-    /** Carta de robo base genérica. */
+    /** Carta de robo base genérica: 1 mana por carta robada. */
     private fun baseDraw(i: Int): Card = Card(
         id = CardId("draw-$i"),
         name = "Reflexión $i",
-        cost = 2,
+        cost = 1 + i,
         attack = 0,
         maxHealth = 2,
         effect = CardEffect.Draw(count = 1 + i),
     )
 
     /** Carta que impone un estado al avatar objetivo con duración. */
-    private fun statusCard(type: StatusType, cost: Int): Card = Card(
+    private fun statusCard(
+        type: StatusType,
+        cost: Int,
+        durationTurns: Int = STATUS_DURATION_TURNS,
+    ): Card = Card(
         id = CardId("status-${type.name.lowercase()}"),
         name = "Aplicar ${type.name}",
         cost = cost,
         attack = 1,
         maxHealth = 3,
-        effect = CardEffect.ApplyStatus(status = type, durationTurns = 2),
+        effect = CardEffect.ApplyStatus(status = type, durationTurns = durationTurns),
     )
 
     /** Carta PASIVA: no dispara efecto, solo aporta un modificador al avatar. */
@@ -123,4 +134,12 @@ class DefaultCardCatalog : CardCatalog {
     override fun all(): List<Card> = cardsById.values.toList()
 
     override fun rarityOf(id: CardId): Rarity? = rarityById[id]
+
+    companion object {
+        /** Duración de los estados de daño (BURN, POISON, BLEED). */
+        const val STATUS_DURATION_TURNS: Int = 2
+
+        /** Duración de FROST: 1 turno para que no pueda bloquear al rival indefinidamente. */
+        const val FROST_DURATION_TURNS: Int = 1
+    }
 }
