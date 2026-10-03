@@ -16,9 +16,9 @@ import org.junit.Test
  * el runtime de Room.
  *
  * Fronteras de la curva (XP acumulada para ALCANZAR el nivel):
- * nivel 40 = 3900, nivel 41 = 4000, nivel 50 = 5350, nivel 51 = 5500,
- * nivel 60 = 7300, nivel 61 = 7500, nivel 70 = 10200, nivel 71 = 10500,
- * nivel 80 = 14100.
+ * nivel 40 = 2400, nivel 41 = 2500, nivel 50 = 3850, nivel 51 = 4000,
+ * nivel 60 = 5800, nivel 61 = 6000, nivel 70 = 8700, nivel 71 = 9000,
+ * nivel 80 = 12600.
  */
 class PlayerProgressMapperTest {
 
@@ -33,28 +33,28 @@ class PlayerProgressMapperTest {
     // -----------------------------------------------------------------
 
     @Test
-    fun xpCero_nivel1T1_max2Copias_siguiente100() {
+    fun xpCero_nivel1T1_max2Copias_siguiente25() {
         val p = derive(0)
         assertEquals(1, p.level)
         assertEquals(Tier.T1, p.tier)
         assertEquals(0, p.xpIntoLevel)
-        assertEquals(100, p.xpNeededForNextLevel)
+        assertEquals(25, p.xpNeededForNextLevel)
         assertEquals(2, p.maxCopiesAllowed)
         assertEquals(0, p.xpTotal)
     }
 
     @Test
-    fun frontera40_41_xp3999ysubida() {
-        // 3999 XP -> nivel 40 (T1) con 99 XP dentro; requiere 4000 para el 41.
-        val antes = derive(3999)
+    fun frontera40_41_xp2499ysubida() {
+        // 2499 XP -> nivel 40 (T1) con 99 XP dentro; requiere 2500 para el 41.
+        val antes = derive(2499)
         assertEquals(40, antes.level)
         assertEquals(Tier.T1, antes.tier)
         assertEquals(99, antes.xpIntoLevel)
-        assertEquals(4000, antes.xpNeededForNextLevel)
+        assertEquals(2500, antes.xpNeededForNextLevel)
         assertEquals(2, antes.maxCopiesAllowed)
 
-        // 4000 XP -> nivel 41 (T2), desbloquea limite 3.
-        val despues = derive(4000)
+        // 2500 XP -> nivel 41 (T2), desbloquea limite 3.
+        val despues = derive(2500)
         assertEquals(41, despues.level)
         assertEquals(Tier.T2, despues.tier)
         assertEquals(0, despues.xpIntoLevel)
@@ -63,20 +63,20 @@ class PlayerProgressMapperTest {
 
     @Test
     fun frontera50_51_seMantieneT2LuegoT3() {
-        // 5350 -> nivel 50 (T2, max 3); 5499 --- 50 con 149 dentro.
-        val n50 = derive(5350)
+        // 3850 -> nivel 50 (T2, max 3); 3999 -> 50 con 149 dentro.
+        val n50 = derive(3850)
         assertEquals(50, n50.level)
         assertEquals(Tier.T2, n50.tier)
         assertEquals(0, n50.xpIntoLevel)
         assertEquals(3, n50.maxCopiesAllowed)
 
-        val n50b = derive(5499)
+        val n50b = derive(3999)
         assertEquals(50, n50b.level)
         assertEquals(149, n50b.xpIntoLevel)
-        assertEquals(5500, n50b.xpNeededForNextLevel)
+        assertEquals(4000, n50b.xpNeededForNextLevel)
 
-        // 5500 -> nivel 51 (T3, max 4).
-        val n51 = derive(5500)
+        // 4000 -> nivel 51 (T3, max 4).
+        val n51 = derive(4000)
         assertEquals(51, n51.level)
         assertEquals(Tier.T3, n51.tier)
         assertEquals(0, n51.xpIntoLevel)
@@ -85,26 +85,26 @@ class PlayerProgressMapperTest {
 
     @Test
     fun frontera60_61_y70_71() {
-        // 7300 -> 60 (T3); 7500 -> 61 (T4, max 5).
-        assertEquals(60, derive(7300).level)
-        assertEquals(61, derive(7500).level)
-        assertEquals(Tier.T4, derive(7500).tier)
-        assertEquals(5, derive(7500).maxCopiesAllowed)
+        // 5800 -> 60 (T3); 6000 -> 61 (T4, max 5).
+        assertEquals(60, derive(5800).level)
+        assertEquals(61, derive(6000).level)
+        assertEquals(Tier.T4, derive(6000).tier)
+        assertEquals(5, derive(6000).maxCopiesAllowed)
 
-        // 10200 -> 70 (T4); 10499 -> 70 con 299 dentro; 10500 -> 71 (T5).
-        assertEquals(70, derive(10200).level)
-        val t4Tope = derive(10499)
+        // 8700 -> 70 (T4); 8999 -> 70 con 299 dentro; 9000 -> 71 (T5).
+        assertEquals(70, derive(8700).level)
+        val t4Tope = derive(8999)
         assertEquals(70, t4Tope.level)
         assertEquals(299, t4Tope.xpIntoLevel)
-        assertEquals(10500, t4Tope.xpNeededForNextLevel)
-        assertEquals(Tier.T5, derive(10500).tier)
-        assertEquals(71, derive(10500).level)
+        assertEquals(9000, t4Tope.xpNeededForNextLevel)
+        assertEquals(Tier.T5, derive(9000).tier)
+        assertEquals(71, derive(9000).level)
     }
 
     @Test
     fun nivel80_topeYMuyAlto_deXp() {
-        // 14100 -> nivel 80, sin siguiente nivel, maximo contractual 5.
-        val tope = derive(14100)
+        // 12600 -> nivel 80, sin siguiente nivel, maximo contractual 5.
+        val tope = derive(12600)
         assertEquals(80, tope.level)
         assertEquals(Tier.T5, tope.tier)
         assertEquals(0, tope.xpIntoLevel)
@@ -112,7 +112,7 @@ class PlayerProgressMapperTest {
         assertEquals(5, tope.maxCopiesAllowed)
 
         // XP sin techo: el nivel se topa en 80 y el sobrante sigue acumulandose.
-        val muyAlto = derive(14100 + 999_999)
+        val muyAlto = derive(12600 + 999_999)
         assertEquals(80, muyAlto.level)
         assertEquals(999_999, muyAlto.xpIntoLevel)
         assertEquals(5, muyAlto.maxCopiesAllowed)
@@ -120,14 +120,14 @@ class PlayerProgressMapperTest {
 
     @Test
     fun toProgress_desdeEntidad_derivaLoMismoQueDeriveProgress() {
-        val entity = PlayerProfileEntity(PlayerProfileEntity.DEFAULT_PLAYER_ID, 5500, 1234L)
+        val entity = PlayerProfileEntity(PlayerProfileEntity.DEFAULT_PLAYER_ID, 4000, 1234L)
         val p = mapper.toProgress(entity, rules)
         assertEquals(PlayerId(PlayerProfileEntity.DEFAULT_PLAYER_ID), p.playerId)
         assertEquals(51, p.level)
         assertEquals(Tier.T3, p.tier)
         assertEquals(0, p.xpIntoLevel)
         assertEquals(1234L, p.updatedAt)
-        assertEquals(rules.levelForXp(5500), p.level)
+        assertEquals(rules.levelForXp(4000), p.level)
     }
 
     @Test

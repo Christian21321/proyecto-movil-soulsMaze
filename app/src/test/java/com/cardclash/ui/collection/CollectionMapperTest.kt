@@ -79,29 +79,29 @@ class CollectionMapperTest {
     @Test
     fun limiteDeCopias_derivaDelTramo() {
         // T1 (nivel 40): limite 2; con 2 copias no se puede anadir mas.
-        val t1 = mapper.toUiState(progress(3900), collection("attack-0" to 2), catalog, rules)
+        val t1 = mapper.toUiState(progress(rules.curve.xpForLevel(40)), collection("attack-0" to 2), catalog, rules)
         assertEquals(2, t1.maxCopiesAllowed)
         assertFalse(card(t1, "attack-0").canAdd)
 
         // T2 (nivel 41): limite 3; con 2 copias aun se puede anadir.
-        val t2 = mapper.toUiState(progress(4000), collection("attack-0" to 2), catalog, rules)
+        val t2 = mapper.toUiState(progress(rules.curve.xpForLevel(41)), collection("attack-0" to 2), catalog, rules)
         assertEquals(3, t2.maxCopiesAllowed)
         assertTrue(card(t2, "attack-0").canAdd)
 
         // T3 (nivel 51): limite 4.
-        val t3 = mapper.toUiState(progress(5500), collection(), catalog, rules)
+        val t3 = mapper.toUiState(progress(rules.curve.xpForLevel(51)), collection(), catalog, rules)
         assertEquals(4, t3.maxCopiesAllowed)
         assertEquals(Tier.T3, t3.tier)
 
         // T5 (nivel 80): limite contratual 5.
-        val t5 = mapper.toUiState(progress(14100), collection(), catalog, rules)
+        val t5 = mapper.toUiState(progress(rules.curve.xpForLevel(80)), collection(), catalog, rules)
         assertEquals(5, t5.maxCopiesAllowed)
         assertEquals(Tier.T5, t5.tier)
     }
 
     @Test
     fun limiteAlcanzado_noPermiteAnadirPeroSiEliminar() {
-        val state = mapper.toUiState(progress(3900), collection("attack-0" to 2), catalog, rules)
+        val state = mapper.toUiState(progress(rules.curve.xpForLevel(40)), collection("attack-0" to 2), catalog, rules)
         val golpe = card(state, "attack-0")
         assertFalse(golpe.canAdd)
         assertTrue(golpe.canRemove)

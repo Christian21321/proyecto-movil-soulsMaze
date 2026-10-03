@@ -59,8 +59,11 @@ fun ProgressSummary(
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
         )
         Spacer(modifier = Modifier.height(8.dp))
-        val xpLabel = xpNeededForNextLevel?.let { "$xpIntoLevel / $it XP para nivel ${level + 1}" }
-            ?: "Nivel maximo alcanzado"
+        // xpNeededForNextLevel es XP TOTAL; la etiqueta muestra la XP de este nivel.
+        val xpLabel = xpNeededForNextLevel?.let { totalForNext ->
+            val levelCost = totalForNext - (xpTotal - xpIntoLevel)
+            "$xpIntoLevel / $levelCost XP para nivel ${level + 1}"
+        } ?: "Nivel maximo alcanzado"
         Text(
             text = xpLabel,
             style = MaterialTheme.typography.labelMedium,
