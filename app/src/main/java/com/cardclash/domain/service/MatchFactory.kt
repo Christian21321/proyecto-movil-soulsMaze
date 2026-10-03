@@ -60,6 +60,7 @@ class MatchFactory(
      * @param heroLevelByPlayer nivel del avatar de cada jugador (opcional; por
      *   defecto nivel 1 -> 30 de vida máxima). Fija la vida máxima del avatar.
      * @param initialHandSize tamaño inicial de la mano (por defecto 3).
+     * @param shuffleDecks baraja los mazos antes de repartir (por defecto true).
      */
     fun newMatch(
         matchId: MatchId,
@@ -67,6 +68,7 @@ class MatchFactory(
         deckByPlayer: Map<PlayerId, List<CardId>>,
         heroLevelByPlayer: Map<PlayerId, Int> = emptyMap(),
         initialHandSize: Int = CombatEngine.DEFAULT_INITIAL_HAND_SIZE,
+        shuffleDecks: Boolean = true,
     ): MatchSnapshot {
         // Construye instancias y resolución por jugador, escopeando cada
         // InstanceId por jugador para que no colisionen entre mazos.
@@ -82,6 +84,7 @@ class MatchFactory(
             deckByPlayer = instantiatedDecks,
             heroLevelByPlayer = heroLevelByPlayer,
             initialHandSize = initialHandSize,
+            shuffleDecks = shuffleDecks,
         )
         // Poblado de la resolución instancia -> carta.
         return snapshot.copy(cardOf = cardOf)

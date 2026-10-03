@@ -42,6 +42,8 @@ class HostSyncEngineTest {
             matchId = MatchId("M1"),
             players = listOf(P1(), P2()),
             deckByPlayer = mapOf(P1() to deck, P2() to deck),
+            // Orden fijo: el test compara instancias concretas del mazo.
+            shuffleDecks = false,
         )
     }
 
