@@ -1,0 +1,299 @@
+// =============================================================================
+// Reglas de seguridad de Cloud Firestore para CardClash (modo PvP por turnos).
+//
+// Modelo de seguridad definido en ADR-007 y ADR-009 (patron host autoritativo):
+//  - Firestore es TRANSPORTE, no autoridad. La legalidad de cada jugada la valida
+//    el motor (CombatEngine) en el dispositivo del host.
+//  - Lo privado (mano/mazos del host) vive SOLO en stateHost; el cliente jamas
+//    puede leerlo.
+//  - Cada documento tiene un unico propietario declarado por estas reglas.
+//  - Deny by default: cualquier ruta no cubierta aqui queda denegada, y todo
+//    acceso requiere request.auth.uid (Firebase Auth anonimo).
+//  - Invariantes de partida validadas en reglas (defensa en profundidad sobre
+//    el motor de juego): fase solo avanza, turno no decrece, winner solo valido,
+//    clientId inmutable tras la union, acciones con whitelist y estados validos.
+//
+// Despliegue:  firebase deploy --only firestore:rules
+// Local:       firebase emulators:start  (el Firestore Emulator valida estas
+//              reglas al arrancar, y las usa en localhost:8080)
+// Validador:   consola Firebase > Firestore > Rules (funcion Playground)
+//
+// NOTA de implementacion: en el lenguaje de reglas, acceder a una propiedad
+// que no existe en un mapa lanza un ERROR DE EVALUACION (no devuelve null).
+// Toda lectura de campo va precedida del guard 'campo' in mapa para producir
+// un DENIED limpio ante payloads malformados y nunca depender de fail-closed
+// por excepcion (fragil si el runtime cambiara la semantica de null).
+// =============================================================================
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // Helpers reutilizables
+    // -------------------------------------------------------------------------
+
+    // Acceso solo para usuarios autenticados (Auth anonimo incluido).
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    // clientId "vacio": ausente, null o cadena vacia.
+    function isEmptyClientId(m) {
+      return !('clientId' in m) || m.clientId == null || m.clientId == '';
+    }
+
+    function matchExists(matchId) {
+      return exists(/databases/$(database)/documents/matches/$(matchId));
+    }
+
+    function matchData(matchId) {
+      return get(/databases/$(database)/documents/matches/$(matchId)).data;
+    }
+
+    // El host es el unico autorizado a ejecutar el motor (ADR-007). La decision
+    // de quien es host se valida contra el documento raiz de la partida, nunca
+    // contra el documento hijo, para evitar falsificaciones locales.
+    function isHost(matchId) {
+      return isSignedIn()
+        && matchExists(matchId)
+        && 'hostId' in matchData(matchId)
+        && matchData(matchId).hostId == request.auth.uid;
+    }
+
+    function isClient(matchId) {
+      return isSignedIn()
+        && matchExists(matchId)
+        && 'clientId' in matchData(matchId)
+        && matchData(matchId).clientId == request.auth.uid;
+    }
+
+    function isParticipant(matchId) {
+      return isHost(matchId) || isClient(matchId);
+    }
+
+    function isMatchInPhase(matchId, expectedPhase) {
+      return isSignedIn() && matchExists(matchId)
+        && 'phase' in matchData(matchId)
+        && matchData(matchId).phase == expectedPhase;
+    }
+
+    // Whitelist estricta de acciones del motor (1:1 con CombatAction del dominio).
+    function isAllowedActionType(actionType) {
+      return actionType in ['BEGIN_TURN', 'PLAY_CARD', 'END_TURN'];
+    }
+
+    function isAllowedActionStatus(status) {
+      return status in ['PENDING', 'PROCESSED', 'REJECTED'];
+    }
+
+    // Valida el payload segun el tipo de accion (defensa en profundidad; la
+    // legalidad real de la jugada la decide exclusivamente el CombantEngine).
+    function isValidActionPayload(actionType, payload) {
+      return (actionType == 'PLAY_CARD' && payload is map
+              && payload.keys().hasAll(['instanceId']))
+          || (actionType in ['BEGIN_TURN', 'END_TURN']
+              && (payload == null || (payload is map && payload.size() == 0)));
+    }
+
+    // Fase solo avanza: PREPARING -> PLAYING -> FINISHED (o permanece igual).
+    function isPhaseAdvance(oldPhase, newPhase) {
+      return (oldPhase == 'PREPARING' && newPhase == 'PLAYING')
+          || (oldPhase == 'PLAYING' && newPhase == 'FINISHED')
+          || oldPhase == newPhase;
+    }
+
+    // Union del cliente: solo cuando la sala esta vacia, el autor no es el
+    // host y UNICAMENTE se escribe clientId (ningun otro campo de la sala).
+    function isClientJoinUpdate(matchId) {
+      return isSignedIn()
+        && matchExists(matchId)
+        && resource != null
+        && request.resource.data != null
+        && 'hostId' in resource.data
+        && 'clientId' in resource.data
+        && isEmptyClientId(resource.data)
+        && request.auth.uid != resource.data.hostId
+        && 'hostId' in request.resource.data
+        && 'clientId' in request.resource.data
+        && request.resource.data.hostId == resource.data.hostId
+        && request.resource.data.clientId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'clientId'
+        ]);
+    }
+
+    // El host actualiza la metadata de la partida sin romper invariantes:
+    // identidades y matchCode inmutables, fase solo avanza, turno no decrece,
+    // winner solo vacio o un participante (y nunca sin FINISHED).
+    // (El lenguaje de reglas no permite variables locales: se repite la
+    // expresion diff/affectedKeys en cada guard para no depender de ellas.)
+    function isHostStateUpdate(matchId) {
+      return isHost(matchId)
+        && resource != null
+        && request.resource.data != null
+        && 'hostId' in request.resource.data
+        && 'clientId' in request.resource.data
+        && 'matchCode' in request.resource.data
+        && 'hostId' in resource.data
+        && 'clientId' in resource.data
+        && 'matchCode' in resource.data
+        && request.resource.data.hostId == resource.data.hostId
+        && request.resource.data.clientId == resource.data.clientId
+        && request.resource.data.matchCode == resource.data.matchCode
+        && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['hostId', 'clientId', 'matchCode'])
+        && (!request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['phase'])
+            || ('phase' in request.resource.data
+                && 'phase' in resource.data
+                && isPhaseAdvance(resource.data.phase,
+                                  request.resource.data.phase)))
+        && (!request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['turn'])
+            || ('turn' in request.resource.data
+                && 'turn' in resource.data
+                && request.resource.data.turn is int
+                && resource.data.turn is int
+                && request.resource.data.turn >= resource.data.turn))
+        && (!request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['winner'])
+            || ('winner' in request.resource.data
+                && request.resource.data.winner in ['', request.resource.data.hostId,
+                                                     request.resource.data.clientId]
+                && (request.resource.data.winner == ''
+                    || ('phase' in request.resource.data
+                        && request.resource.data.phase == 'FINISHED'))));
+    }
+
+    // -------------------------------------------------------------------------
+    // matches/{matchId}: metadata ligera de la partida
+    // Campos (ADR-009): hostId, clientId, matchCode (6 chars), phase, turn,
+    // currentPlayer, winner, status, createdAt, updatedAt.
+    // -------------------------------------------------------------------------
+    match /matches/{matchId} {
+      // Lectura: solo participantes (el host y el cliente ya unido). Un tercero
+      // no puede enumerar partidas ni ver uids de otros jugadores ni matchCodes.
+      // La union se inicia desde el cliente que CREA la partida compartiendo el
+      // matchCode por canal externo, no por descubrimiento en Firestore.
+      allow read: if isParticipant(matchId);
+
+      // Creacion: el host crea la sala con su propio uid, sin client, con
+      // matchCode de 6 caracteres, fase PREPARING, turn 0, winner '' y sin
+      // poder sobrescribir una sala existente.
+      allow create: if request.resource.data != null
+        && isSignedIn()
+        && 'hostId' in request.resource.data
+        && 'clientId' in request.resource.data
+        && 'matchCode' in request.resource.data
+        && 'phase' in request.resource.data
+        && 'turn' in request.resource.data
+        && 'winner' in request.resource.data
+        && 'createdAt' in request.resource.data
+        && 'updatedAt' in request.resource.data
+        && request.resource.data.hostId == request.auth.uid
+        && isEmptyClientId(request.resource.data)
+        && request.resource.data.matchCode is string
+        && request.resource.data.matchCode.size() == 6
+        && request.resource.data.phase == 'PREPARING'
+        && request.resource.data.turn is int
+        && request.resource.data.turn == 0
+        && request.resource.data.winner == ''
+        && !matchExists(matchId);
+
+      // Actualizacion: union del cliente (solo clientId en sala vacia) o la
+      // actualizacion autoritativa del host con invariantes. Nada mas.
+      allow update: if isSignedIn()
+        && (isClientJoinUpdate(matchId) || isHostStateUpdate(matchId));
+
+      // Borrado: solo el host, y solo una partida FINISHED (los abandonos se
+      // modelan con phase FINISHED o status 'ABANDONED' para conservar el
+      // registro; una sala PREPARING sin cliente puede descartarse).
+      allow delete: if isHost(matchId)
+        && 'phase' in resource.data
+        && (
+          resource.data.phase == 'FINISHED'
+          || (resource.data.phase == 'PREPARING'
+              && isEmptyClientId(resource.data))
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // matches/{matchId}/stateHost/current: estado COMPLETO (solo el host)
+    // Contiene ambas manos, mazos, cardOf, tableros, manas, log, version y
+    // processedActionSeq. Es la fuente autoritativa de reconstruccion.
+    // -------------------------------------------------------------------------
+    match /matches/{matchId}/stateHost/current {
+      allow read: if isHost(matchId);
+      allow create, update: if isHost(matchId);
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // matches/{matchId}/stateClient/current: proyeccion FILTRADA para el cliente
+    // Escrita por el host (que autoriza su contenido), legible solo por el
+    // cliente. Nunca contiene la mano del host, decks ni cardOf.
+    // -------------------------------------------------------------------------
+    match /matches/{matchId}/stateClient/current {
+      allow read: if isClient(matchId);
+      allow create, update: if isHost(matchId);
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // matches/{matchId}/actions/{actionId}: cola de acciones del motor
+    // Campos (ADR-009): playerId, actionType, payload, sequence, timestamp,
+    // status (PENDING/PROCESSED/REJECTED), result.
+    // -------------------------------------------------------------------------
+    match /matches/{matchId}/actions/{actionId} {
+      // Lectura: ambos participantes (el cliente lee la cola para saber si el
+      // host proceso su accion; el host la consume).
+      allow read: if isParticipant(matchId);
+
+      // Creacion: SOLO durante PLAYING, un participante crea su propia accion
+      // (playerId == auth.uid), con actionType whitelist, payload valido,
+      // sequence entero, timestamp y status inicial PENDING. El autor no puede
+      // fijar PROCESSED/REJECTED ni escribir resultado.
+      allow create: if isParticipant(matchId)
+        && isMatchInPhase(matchId, 'PLAYING')
+        && 'playerId' in request.resource.data
+        && 'actionType' in request.resource.data
+        && 'payload' in request.resource.data
+        && 'sequence' in request.resource.data
+        && 'timestamp' in request.resource.data
+        && 'status' in request.resource.data
+        && request.resource.data.playerId == request.auth.uid
+        && request.resource.data.actionType is string
+        && isAllowedActionType(request.resource.data.actionType)
+        && isValidActionPayload(request.resource.data.actionType,
+                                request.resource.data.payload)
+        && request.resource.data.sequence is int
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.keys().hasOnly([
+          'playerId', 'actionType', 'payload', 'sequence', 'timestamp', 'status'
+        ]);
+
+      // Actualizacion: solo el host, y solo el desenlace de la accion
+      // (status/result) tras procesarla con el motor. El autor no puede editar
+      // su propia accion ni su payload una vez enviada.
+      allow update: if isHost(matchId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'result'])
+        && (!('status' in request.resource.data)
+            || ('status' in request.resource.data
+                && request.resource.data.status is string
+                && isAllowedActionStatus(request.resource.data.status)));
+
+      // El cliente nunca borra acciones (ni el host: se conservan como evidencia).
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Deny by default explicito para cualquier otra coleccion/documento.
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

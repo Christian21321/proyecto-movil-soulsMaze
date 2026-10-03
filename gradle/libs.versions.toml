@@ -1,0 +1,158 @@
+[versions]
+agp = "9.3.2"
+coreKtx = "1.10.1"
+junit = "4.13.2"
+junitVersion = "1.1.5"
+espressoCore = "3.5.1"
+appcompat = "1.6.1"
+material = "1.10.0"
+kotlinxCoroutines = "1.11.0"
+mockito = "5.23.0"
+# Firebase (sync PvP): Auth anonimo + Cloud Firestore. La version de los SDK
+# individuales la fija el Firebase Android BoM (ver seccion [libraries]).
+firebaseBom = "34.18.0"
+# Plugin de Google Services (procesa google-services.json). >= 4.4.2 es lo minimo
+# compatible con AGP 9.x; se usa 4.5.0 (ultima publicada).
+googleServices = "4.5.0"
+# Room (persistencia local): ultima estable de la serie 2.x (API clasica con
+# room-runtime/room-ktx/room-compiler). Room 3.x existe (androidx.room3) pero es
+# un cambio breaking (nuevo package, coroutine-first, sin SupportSQLite); la capa
+# local de CardClash usa la API 2.x estable. Room 2.8.x requiere KSP (nunca kapt).
+room = "2.8.4"
+# KSP (Kotlin Symbol Processing): desde 2.3.0 ya NO va atado a la version del
+# compilador Kotlin. 2.3.1+ es el minimo para AGP 9 con Kotlin embebido
+# (built-in Kotlin); la guia oficial de migracion a AGP 9 recomienda 2.3.6+.
+# 2.3.11 es la ultima estable (ago 2026) e incluye fixes de AGP 9 built-in Kotlin.
+ksp = "2.3.11"
+# Robolectric (tests de integracion Room en JVM; Etapa 7, Grupos A/B): permite
+# ejecutar el framework Android (Context, SQLite, etc.) en unit tests JVM. 4.16.1
+# estable soporta hasta SDK 36 como maxSdkVersion; como targetSdk del proyecto es
+# 37, las suites Robolectric DEBEN fijar @Config(sdk = [35]) para no excederlo.
+robolectric = "4.16.1"
+# androidx.test:core-ktx: ApplicationProvider para obtener el Context de la app
+# dentro de las suites Robolectric (construir bases Room in-memory sin emulador).
+androidxTestCore = "1.6.1"
+
+# ---------------------------------------------------------------------------
+# UI (Etapa 6): Jetpack Compose + AndroidX Lifecycle + Navigation Compose.
+#
+# AGP 9.x con Kotlin embebido ("built-in Kotlin") embebe KGP (Kotlin Gradle
+# Plugin) 2.2.10 (runtime dependency de AGP). Para Compose, esto significa:
+#  * El compilador de Compose deja de ser un plugin aparte de androidx y pasa a
+#    ser el Gradle plugin "org.jetbrains.kotlin.plugin.compose" (Compose Compiler
+#    Gradle plugin), versionado 1:1 con la KGP. Como la KGP embebida es 2.2.10,
+#    se aplica compose-compiler en 2.2.10 (ver detalle en [plugins]).
+#  * La DSL "composeOptions.kotlinCompilerExtensionVersion" esta DEPRECADA e
+#    ignorada en AGP 9: corresponde al compilador Compose antiguo (androidx,
+#    serie 1.5.x) incompatible con Kotlin 2.x. NO se declara.
+#  * La integracion se activa con buildFeatures.compose = true en el modulo.
+# ---------------------------------------------------------------------------
+# Compose BoM: Android recomienda mantenerlo en la ultima estable. La serie
+# 2026.x es la que exige compileSdk 37 + AGP 9.2+ (requisitos que ya cumple este
+# proyecto: compileSdk 37, AGP 9.3.2). 2026.08.00 trae Compose UI 1.12.0 y
+# Material 3 1.4.0 estables. El BoM fija las versiones de ui/ui-graphics/
+# material3/ui-tooling, por lo que esas dependencias se declaran sin version.
+composeBom = "2026.08.00"
+# activity-compose: setContent{} / ComponentActivity -> Compose. 1.13.0 es la
+# ultima estable de la serie Activity (mar 2026), compatible con compileSdk 37.
+activityCompose = "1.13.0"
+# Lifecycle (MVVM/UDF con ViewModel + StateFlow). 2.9.4 es la ultima estable de
+# la serie 2.9, la misma contra la que Navigation Compose 2.9.x se prueba; cubre
+# lifecycle-viewmodel-compose y lifecycle-runtime-compose (collectAsStateWithLifecycle).
+# 2.x es compatible con Compose BOM 2026.08.00 y con AGP 9 / Kotlin embebido.
+lifecycle = "2.9.4"
+# Navigation Compose: ultima estable de la serie 2.9 (abril 2026), optimizada
+# para Compose y compatible con Kotlin embebido. No se usa Navigation3 (aun en
+# alpha/estructuralmente distinta) para no arriesgar la toolchain delicada.
+navigationCompose = "2.9.8"
+# Window Size Class: para UI responsive segun tamano ventana.
+window = "1.4.0"
+# Compose Compiler Gradle plugin (compilador del @Composable). Debe coincidir
+# con la version de la KGP embebida del built-in Kotlin de AGP 9 (2.2.10).
+# Es el mecanismo oficial desde Kotlin 2.0; reemplaza a composeOptions.
+composeCompiler = "2.2.10"
+
+# Nota: NO se declara el plugin "org.jetbrains.kotlin.android".
+# AGP 9.x (9.3.2 en este proyecto) incluye soporte Kotlin embebido ("built-in Kotlin")
+# habilitado por defecto, y el plugin kotlin-android esta deprecado para AGP >= 9.0:
+# aplicarlo provoca el error "The 'org.jetbrains.kotlin.android' plugin is no longer
+# required for Kotlin support since AGP 9.0." Por eso el codigo Kotlin de src/main y
+# src/test se compila de forma nativa con AGP, sin el plugin de la KGP.
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockito" }
+
+# Testing de integracion (Etapa 7, Grupos A/B): Robolectric ejecuta el framework
+# Android en JVM; androidx.test:core-ktx aporta ApplicationProvider para obtener
+# un Context real (bases Room in-memory) dentro de dichas suites.
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-test-core-ktx = { group = "androidx.test", name = "core-ktx", version.ref = "androidxTestCore" }
+
+# Firebase: el BoM se importa como platform(...) y los SDK sin version se resuelven
+# con la version mapeada por el BoM (firebase-auth 24.2.0, firebase-firestore 26.6.0
+# para firebase-bom 34.18.0). No hay analogos "test" oficiales para unit tests JVM:
+# la capa de dominio no importa Firebase, por lo que no se anade ninguna
+# dependencia de test de Firebase.
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
+firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
+
+# Room (capa de persistencia local, Etapa 5): runtime, KTX (coroutines +
+# withTransaction) y compiler via KSP. El runtime y room-ktx son dependencias de
+# implementacion; room-compiler se registra con la configuracion ksp(...) del
+# plugin com.google.devtools.ksp.
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# Compose (Etapa 6): el BoM se importa como platform(...) y fija las versiones de
+# ui/ui-graphics/material3/ui-tooling/ui-tooling-preview (todas sin version aqui).
+# material3 1.4.0, ui 1.12.0 / ui-graphics 1.12.0 con compose-bom 2026.08.00.
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+# Integration Compose + Activity: setContent {} (Etapa 6).
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+
+# Lifecycle Compose (MVVM/UDF): lifecycle-viewmodel-compose (viewModel{} en Compose)
+# y lifecycle-runtime-compose (collectAsStateWithLifecycle para exponer StateFlow).
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
+
+# Navigation Compose (grafo de destinos Compose, Etapa 6).
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
+
+# Window Size Class (responsive UI segun tamano ventana).
+androidx-window = { group = "androidx.window", name = "window", version.ref = "window" }
+
+# ui-test-manifest: manifiesto de test Compose para debug (Activity de prueba).
+# Se usa solo como debugImplementation en :app para el tooling de @Preview/tests.
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+# Plugin google-services: convierte app/google-services.json en recursos (R.string.
+# google_app_id, etc.). Se aplica en el modulo :app. Con AGP 9.x funciona sin tocar
+# la KGP (no aplica Kotlin). Version 4.5.0 compatible con AGP 9 (minimo 4.4.2).
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+# Plugin KSP: compilador de anotaciones de Room (room-compiler). Compatible con
+# AGP 9.x / Kotlin embebido (built-in Kotlin) desde 2.3.1; ver nota en [versions].
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+# Plugin Compose Compiler: el compilador del lenguaje Compose para Kotlin 2.x.
+# Se aplica SOLO en el modulo :app (junto a buildFeatures.compose = true). La
+# version alias 1:1 con la KGP embebida del built-in Kotlin de AGP 9 (2.2.10).
+# NO pasar por composeOptions.kotlinCompilerExtensionVersion (deprecado/ignorado
+# en AGP 9). Version en [versions].
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "composeCompiler" }
+
