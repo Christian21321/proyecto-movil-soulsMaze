@@ -1,0 +1,30 @@
+# Gradle / build
+.gradle/
+build/
+/captures
+.externalNativeBuild
+.cxx/
+.kotlin/
+
+# Local config and secrets
+local.properties
+*.keystore
+*.jks
+google-services.json
+
+# Android Studio / IntelliJ
+*.iml
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+
+# Tooling
+.opencode/node_modules/
+.opencode/package-lock.json
+
+# OS
+.DS_Store
+Thumbs.db
