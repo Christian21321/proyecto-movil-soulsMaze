@@ -257,7 +257,9 @@ class CombatReducerTest {
     @Test
     fun maxMana_reflejaPasivasDelAvatar() {
         val ui = CombatReducer.fromSnapshot(
-            snapshot(baseMaxMana = 10, passives = mapOf(me to listOf(PassiveBonus(UnitStat.MAX_MANA, 2)))),
+            // Turno avanzado: la curva de mana ya llegó al tope base 10.
+            snapshot(baseMaxMana = 10, passives = mapOf(me to listOf(PassiveBonus(UnitStat.MAX_MANA, 2))))
+                .copy(turn = 21),
             catalog, me,
         )
         // 10 base + 2 por la pasiva MAX_MANA vinculada al avatar.

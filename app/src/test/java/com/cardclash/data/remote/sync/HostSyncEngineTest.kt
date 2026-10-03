@@ -65,7 +65,8 @@ class HostSyncEngineTest {
         )
         val processed1 = begin as HostSyncEngine.HostSyncResult.Processed
         state = processed1.state
-        assertEquals(10, state.snapshot.manaOf(P1()))
+        // Curva creciente: primer turno propio de P1 -> 1 de mana.
+        assertEquals(1, state.snapshot.manaOf(P1()))
         assertTrue(state.snapshot.handOf(P1()).isNotEmpty())
 
         // PLAY_CARD (seq 1) de la primera carta en mano (attack-0, coste 1).
@@ -78,9 +79,9 @@ class HostSyncEngineTest {
         val processed2 = play as HostSyncEngine.HostSyncResult.Processed
 
         // Sin tableros: el ataque daña el avatar rival. La carta sale de la mano
-        // y el mana se descuenta (10 - 1).
+        // y el mana se descuenta (1 - 1).
         assertTrue(processed2.state.snapshot.handOf(P1()).none { it == cardToPlay })
-        assertEquals(9, processed2.state.snapshot.manaOf(P1()))
+        assertEquals(0, processed2.state.snapshot.manaOf(P1()))
         // El ataque golpea el avatar del rival dejandolo por debajo de su maximo.
         assertEquals(
             MatchSnapshot.heroMaxHealthForLevel(MatchSnapshot.DEFAULT_HERO_LEVEL) - 3,
@@ -301,7 +302,7 @@ class HostSyncEngineTest {
         )
         val processedBegin = begin as HostSyncEngine.HostSyncResult.Processed
         val afterBegin = processedBegin.state
-        assertEquals(10, afterBegin.snapshot.manaOf(P1()))
+        assertEquals(1, afterBegin.snapshot.manaOf(P1()))
         assertEquals(1L, afterBegin.nextExpectedActionSeq)
 
         val play = sync.process(
