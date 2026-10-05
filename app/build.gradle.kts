@@ -78,8 +78,11 @@ android {
 
     buildTypes {
         release {
+            // R8: reduce y optimiza el código y elimina recursos sin usar en
+            // release. Las reglas propias van en src/main/keepRules/; Room,
+            // Firebase y Compose traen las suyas.
             optimization {
-                enable = false
+                enable = true
             }
         }
     }
