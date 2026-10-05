@@ -30,7 +30,7 @@ class HomeMapperTest {
         assertEquals(Tier.T1, state.tier)
         assertEquals(0, state.xpTotal)
         assertEquals(0, state.xpIntoLevel)
-        assertEquals(100, state.xpNeededForNextLevel)
+        assertEquals(25, state.xpNeededForNextLevel)
         assertEquals(0f, state.xpProgressFraction)
         assertEquals(0, state.collectionSize)
         assertEquals(0, state.totalCopies)
@@ -39,26 +39,28 @@ class HomeMapperTest {
 
     @Test
     fun estadoConXp_derivaNivelYTramo() {
-        val state = mapper.toUiState(progress(4000), collection(), rules)
+        // Nivel 41 = 10*25 + 10*50 + 10*75 + 10*100 = 2500 XP.
+        val state = mapper.toUiState(progress(2500), collection(), rules)
         assertEquals(41, state.level)
         assertEquals(Tier.T2, state.tier)
-        assertEquals(4000, state.xpTotal)
+        assertEquals(2500, state.xpTotal)
         assertEquals(0, state.xpIntoLevel)
-        assertEquals(4150, state.xpNeededForNextLevel)
+        assertEquals(2650, state.xpNeededForNextLevel)
         assertEquals(0f, state.xpProgressFraction)
     }
 
     @Test
     fun estadoAMitadDeNivel_fraccionCorrecta() {
-        val state = mapper.toUiState(progress(150), collection(), rules)
-        assertEquals(2, state.level)
-        assertEquals(50, state.xpIntoLevel)
+        // Nivel 11 empieza en 250 XP y cuesta 50: 275 XP es la mitad.
+        val state = mapper.toUiState(progress(275), collection(), rules)
+        assertEquals(11, state.level)
+        assertEquals(25, state.xpIntoLevel)
         assertEquals(0.5f, state.xpProgressFraction)
     }
 
     @Test
     fun nivelMaximo_sinSiguienteYFraccionLlena() {
-        val state = mapper.toUiState(progress(14100), collection(), rules)
+        val state = mapper.toUiState(progress(12600), collection(), rules)
         assertEquals(80, state.level)
         assertEquals(Tier.T5, state.tier)
         assertNull(state.xpNeededForNextLevel)

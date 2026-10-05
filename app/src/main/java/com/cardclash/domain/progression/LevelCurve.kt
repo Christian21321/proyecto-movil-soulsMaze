@@ -14,11 +14,17 @@ package com.cardclash.domain.progression
  *
  * | Tramo      | Niveles   | XP por nivel |
  * |------------|-----------|--------------|
- * | T1         | 1-40      | 100          |
+ * | T1         | 1-10      | 25           |
+ * | T1         | 11-20     | 50           |
+ * | T1         | 21-30     | 75           |
+ * | T1         | 31-40     | 100          |
  * | T2         | 41-50     | 150          |
  * | T3         | 51-60     | 200          |
  * | T4         | 61-70     | 300          |
  * | T5         | 71-80     | 400          |
+ *
+ * El tramo T1 empieza barato (25 XP = 5 victorias por nivel) y sube por
+ * decenas hasta 100, para que los primeros niveles lleguen rápido.
  *
  * `xpForLevel(level)` devuelve la XP TOTAL necesaria para ALCANZAR [level],
  * como suma de la XP por nivel desde el nivel 1. Para el nivel 1 la XP
@@ -39,11 +45,21 @@ class LevelCurve {
      * dentro del tramo al que pertenece [level]). [level] debe estar en 1..80.
      */
     fun xpPerLevel(level: Int): Int = when (Tier.forLevel(level)) {
-        Tier.T1 -> 100
+        Tier.T1 -> when (level) {
+            in 1..10 -> 25
+            in 11..20 -> 50
+            in 21..30 -> 75
+            else -> 100
+        }
         Tier.T2 -> 150
         Tier.T3 -> 200
         Tier.T4 -> 300
         Tier.T5 -> 400
+    }
+
+    /** XP total para alcanzar cada nivel; índice = nivel (0 sin uso). */
+    private val totalXpByLevel: IntArray = IntArray(MAX_LEVEL + 1).also { table ->
+        for (level in 2..MAX_LEVEL) table[level] = table[level - 1] + xpPerLevel(level - 1)
     }
 
     /**
@@ -52,23 +68,24 @@ class LevelCurve {
      */
     fun xpForLevel(level: Int): Int {
         require(level in 1..MAX_LEVEL) { "Nivel $level fuera del rango 1..$MAX_LEVEL" }
-        if (level == 1) return 0
-        return (1 until level).sumOf { xpPerLevel(it) }
+        return totalXpByLevel[level]
     }
 
     /**
      * Deriva el nivel a partir de la XP total acumulada.
      * Devuelve el mayor nivel alcanzable sin superar [xp] (topado a [MAX_LEVEL]).
      * La XP total se acumula sin techo: si [xp] excede la XP del nivel maximo,
-     * devuelve [MAX_LEVEL].
+     * devuelve [MAX_LEVEL]. Búsqueda binaria sobre la tabla precalculada.
      */
     fun levelForXp(xp: Int): Int {
         val total = xp.coerceAtLeast(0)
-        var level = 1
-        while (level < MAX_LEVEL && total >= xpForLevel(level + 1)) {
-            level++
+        var low = 1
+        var high = MAX_LEVEL
+        while (low < high) {
+            val mid = (low + high + 1) / 2
+            if (totalXpByLevel[mid] <= total) low = mid else high = mid - 1
         }
-        return level
+        return low
     }
 
     /**

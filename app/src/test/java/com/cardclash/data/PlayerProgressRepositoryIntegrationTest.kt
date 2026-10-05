@@ -156,8 +156,8 @@ class PlayerProgressRepositoryIntegrationTest {
 
     @Test
     fun addCardCopy_cuandoSubeNivel_desbloqueaMasCopias() = runBlocking {
-        // XP 3999 = nivel 40 (T1, limite 2); 4000+ = nivel 41 (T2, limite 3).
-        seedXp(3999)
+        // XP 2499 = nivel 40 (T1, limite 2); 2500+ = nivel 41 (T2, limite 3).
+        seedXp(2499)
         assertEquals(40, repo.currentProgress().level)
         assertEquals(2, repo.currentProgress().maxCopiesAllowed)
 
@@ -166,7 +166,7 @@ class PlayerProgressRepositoryIntegrationTest {
         repo.addCardCopy(cardId)
         assertEquals(CardCollectionOps.AddCopyOutcome.LimitReached(2, 2), repo.addCardCopy(cardId))
 
-        // Gano una victoria: 4004 XP -> nivel 41 -> limite 3 desbloqueado.
+        // Gano una victoria: 2504 XP -> nivel 41 -> limite 3 desbloqueado.
         val afterWin = repo.grantXp(XpSource.VICTORY)
         assertEquals(41, afterWin.level)
         assertEquals(3, afterWin.maxCopiesAllowed)

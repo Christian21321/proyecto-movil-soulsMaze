@@ -36,56 +36,86 @@ class ProgressionTest {
 
     @Test
     fun xpAcumulada_derivaBienVariosNiveles() {
-        // 100 XP por nivel en T1: 5 niveles completos -> nivel 6.
-        assertEquals(2, rules.levelForXp(100))
-        assertEquals(5, rules.levelForXp(400))
-        assertEquals(6, rules.levelForXp(500))
+        // 25 XP por nivel en los niveles 1-10.
+        assertEquals(2, rules.levelForXp(25))
+        assertEquals(5, rules.levelForXp(100))
+        assertEquals(11, rules.levelForXp(250))
+        // 11-20 cuestan 50: 250 + 50 = 300 -> nivel 12.
+        assertEquals(12, rules.levelForXp(300))
     }
 
     @Test
     fun xpForLevel_nivel1EsCero_y_acumulaCorrecto() {
         assertEquals(0, rules.curve.xpForLevel(1))
-        assertEquals(100, rules.curve.xpForLevel(2))
-        // 3 niveles de 100 acumulados desde el 1 -> nivel 4.
-        assertEquals(300, rules.curve.xpForLevel(4))
+        assertEquals(25, rules.curve.xpForLevel(2))
+        assertEquals(10 * 25, rules.curve.xpForLevel(11))
+        assertEquals(10 * 25 + 10 * 50, rules.curve.xpForLevel(21))
+        assertEquals(10 * 25 + 10 * 50 + 10 * 75, rules.curve.xpForLevel(31))
+    }
+
+    @Test
+    fun xpPerLevel_t1EmpiezaBaratoYSubeHasta100() {
+        assertEquals(25, rules.curve.xpPerLevel(1))
+        assertEquals(25, rules.curve.xpPerLevel(10))
+        assertEquals(50, rules.curve.xpPerLevel(11))
+        assertEquals(75, rules.curve.xpPerLevel(21))
+        assertEquals(100, rules.curve.xpPerLevel(31))
+        assertEquals(100, rules.curve.xpPerLevel(40))
+        assertEquals(150, rules.curve.xpPerLevel(41))
+        // Cada nivel cuesta al menos lo mismo que el anterior.
+        (2..LevelCurve.MAX_LEVEL).forEach { level ->
+            assertTrue(rules.curve.xpPerLevel(level) >= rules.curve.xpPerLevel(level - 1))
+        }
     }
 
     @Test
     fun limitesDeTramo_niveles40_41_50_51_60_61_70_71_80() {
-        // T1 (1-40) = 100 XP/nivel; pasar al nivel 41 cuesta 40*100 = 4000.
-        assertEquals(40, rules.levelForXp(39 * 100))
-        assertEquals(40, rules.levelForXp(40 * 100 - 1))
-        assertEquals(41, rules.levelForXp(40 * 100))
-        // T2 inicia (41): 40 niveles de 100 (4000) + 1 de 150 (150) = 4150 -> nivel 42.
-        assertEquals(41, rules.levelForXp(4000))
-        assertEquals(42, rules.levelForXp(4000 + 150))
+        // T1 (1-40): 10*25 + 10*50 + 10*75 + 10*100 = 2500 para llegar al 41.
+        val xp41 = 10 * 25 + 10 * 50 + 10 * 75 + 10 * 100
+        assertEquals(40, rules.levelForXp(xp41 - 100))
+        assertEquals(40, rules.levelForXp(xp41 - 1))
+        assertEquals(41, rules.levelForXp(xp41))
+        assertEquals(42, rules.levelForXp(xp41 + 150))
 
-        // T3 inicia en 51: 40*100 (T1) + 10*150 (T2) = 5500 para llegar a 51.
-        assertEquals(50, rules.levelForXp(5500 - 150))
-        assertEquals(51, rules.levelForXp(5500))
+        // T3 inicia en 51: + 10*150 (T2).
+        val xp51 = xp41 + 10 * 150
+        assertEquals(50, rules.levelForXp(xp51 - 150))
+        assertEquals(51, rules.levelForXp(xp51))
 
-        // T4 inicia en 61: 40*100 + 10*150 + 10*200 = 7500.
-        assertEquals(60, rules.levelForXp(7500 - 200))
-        assertEquals(61, rules.levelForXp(7500))
+        // T4 inicia en 61: + 10*200.
+        val xp61 = xp51 + 10 * 200
+        assertEquals(60, rules.levelForXp(xp61 - 200))
+        assertEquals(61, rules.levelForXp(xp61))
 
-        // T5 inicia en 71: 40*100 + 10*150 + 10*200 + 10*300 = 10500.
-        assertEquals(70, rules.levelForXp(10500 - 300))
-        assertEquals(71, rules.levelForXp(10500))
+        // T5 inicia en 71: + 10*300.
+        val xp71 = xp61 + 10 * 300
+        assertEquals(70, rules.levelForXp(xp71 - 300))
+        assertEquals(71, rules.levelForXp(xp71))
 
-        // Nivel 80 (tope): 40*100 + 10*150 + 10*200 + 10*300 + 9*400 = 14100.
-        val xp80 = 40 * 100 + 10 * 150 + 10 * 200 + 10 * 300 + 9 * 400
+        // Nivel 80 (tope): + 9*400.
+        val xp80 = xp71 + 9 * 400
+        assertEquals(79, rules.levelForXp(xp80 - 1))
         assertEquals(80, rules.levelForXp(xp80))
         // Mas alla del maximo, el nivel se topa en 80 (XP sin techo).
         assertEquals(80, rules.levelForXp(xp80 + 99999))
     }
 
     @Test
+    fun levelForXp_coincideConXpForLevelEnTodosLosNiveles() {
+        (1..LevelCurve.MAX_LEVEL).forEach { level ->
+            val xp = rules.curve.xpForLevel(level)
+            assertEquals(level, rules.levelForXp(xp))
+            if (level > 1) assertEquals(level - 1, rules.levelForXp(xp - 1))
+        }
+    }
+
+    @Test
     fun xpIntoLevel_sobranteDentroDelNivel() {
-        // 250 XP -> nivel 3 (200 acumulado) y 50 dentro del nivel 3.
-        assertEquals(3, rules.levelForXp(250))
-        assertEquals(50, rules.curve.xpIntoLevel(250))
-        // Con XP exacta para nivel 4 (300), sobrante 0.
-        assertEquals(0, rules.curve.xpIntoLevel(300))
+        // 60 XP -> nivel 3 (50 acumulado) y 10 dentro del nivel 3.
+        assertEquals(3, rules.levelForXp(60))
+        assertEquals(10, rules.curve.xpIntoLevel(60))
+        // Con XP exacta para nivel 4 (75), sobrante 0.
+        assertEquals(0, rules.curve.xpIntoLevel(75))
     }
 
     // ---------------------------------------------------------------------

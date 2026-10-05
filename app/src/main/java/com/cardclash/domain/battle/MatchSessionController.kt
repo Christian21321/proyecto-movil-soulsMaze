@@ -11,7 +11,6 @@ import com.cardclash.domain.engine.CombatEngine
 import com.cardclash.domain.engine.DefaultCardCatalog
 import com.cardclash.domain.engine.KotlinRandomDiceRoller
 import com.cardclash.domain.engine.SeededDiceRoller
-import com.cardclash.domain.model.CardEffect
 import com.cardclash.domain.model.CardId
 import com.cardclash.domain.model.InstanceId
 import com.cardclash.domain.model.MatchId
@@ -61,8 +60,8 @@ import kotlinx.coroutines.launch
  *    (BeginTurn: mana lleno + robo).
  * 2. La UI juega cartas jugables ([playCard]) y termina el turno ([endTurn]).
  * 3. Al terminar mi turno, si no hay ganador, el controlador invoca [playBotTurn]:
- *    el BOT inicia su turno, juega cartas razonables (prioriza dañar mi
- *    avatar) y termina su turno. Al volver a mi turno, se AUTO-INICIA de nuevo.
+ *    el BOT inicia su turno, juega las cartas que elige [BotPolicy] y termina
+ *    su turno. Al volver a mi turno, se AUTO-INICIA de nuevo.
  * 4. Cuando una acción produce [MatchResult], el controlador pasa a FINISHED,
  *    publica la vista final y registra el resultado en [MatchResultSink].
  *
@@ -282,13 +281,14 @@ class MatchSessionController(
             if (begin !is HostSyncEngine.HostSyncResult.Processed) break
             if (finished() || !isBotTurn()) break
 
-            // Jugar hasta N cartas razonables (prioriza dañar el avatar rival del BOT).
+            // Jugar cartas según [BotPolicy] hasta que no quede jugada útil. Si una
+            // jugada se rechaza, el BOT pasa para no llenar el log de rechazos.
             var cardsPlayed = 0
             while (cardsPlayed < 8 && !finished() && isBotTurn()) {
-                val candidates = botCandidates()
-                if (candidates.isEmpty()) break
-                val (inst, target) = candidates.first()
-                processLocal(ActionType.PLAY_CARD, botPlayer, inst, target)
+                val snap = localState?.snapshot ?: break
+                val play = BotPolicy.nextPlay(snap, botPlayer, catalog) ?: break
+                val result = processLocal(ActionType.PLAY_CARD, botPlayer, play.instanceId, play.target)
+                if (result !is HostSyncEngine.HostSyncResult.Processed) break
                 cardsPlayed++
             }
             if (finished() || !isBotTurn()) break
@@ -304,36 +304,6 @@ class MatchSessionController(
     private fun isBotTurn(): Boolean {
         val snap = localState?.snapshot ?: return false
         return snap.currentPlayer == botPlayer && snap.phase == MatchSnapshot.Phase.PLAYING
-    }
-
-    /**
-     * Cartas del BOT que puede jugar ahora, con el avatar objetivo preferido.
-     *
-     * No hay unidades que atacar (rediseño Fase 1): los efectos apuntan SIEMPRE a
-     * un avatar. La política de objetivos, discriminada por [CardEffect]:
-     * - [CardEffect.Attack] -> [myId]: daña el avatar del jugador local (el rival).
-     * - [CardEffect.Heal] -> [botPlayer]: cura el avatar del propio BOT.
-     * - [CardEffect.ApplyStatus] -> [myId]: entorpece el avatar del rival.
-     * - [CardEffect.Draw] / [CardEffect.None] / [CardEffect.PassiveBuff] -> null.
-     * Las cartas pasivas y las que exceden el mana disponible se descartan.
-     */
-    private fun botCandidates(): List<Pair<InstanceId, PlayerId?>> {
-        val snap = localState?.snapshot ?: return emptyList()
-        val mana = snap.manaOf(botPlayer)
-        return snap.handOf(botPlayer).mapNotNull { inst ->
-            val cardId = snap.cardOf[inst] ?: return@mapNotNull null
-            val card = catalog.findById(cardId) ?: return@mapNotNull null
-            if (card.isPassive || mana < card.cost) return@mapNotNull null
-            val target = when (card.effect) {
-                is CardEffect.Attack -> myId
-                is CardEffect.Heal -> botPlayer
-                is CardEffect.ApplyStatus -> myId
-                is CardEffect.Draw -> null
-                is CardEffect.None -> null
-                is CardEffect.PassiveBuff -> null
-            }
-            inst to target
-        }
     }
 
     /**
