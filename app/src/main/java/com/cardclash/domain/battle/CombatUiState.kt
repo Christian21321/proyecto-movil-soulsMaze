@@ -1,6 +1,7 @@
 package com.cardclash.domain.battle
 
 import com.cardclash.domain.model.CardId
+import com.cardclash.domain.model.DiceRollEvent
 import com.cardclash.domain.model.InstanceId
 import com.cardclash.domain.model.MatchId
 import com.cardclash.domain.model.MatchSnapshot
@@ -64,6 +65,8 @@ data class CombatUiState(
     val myDeckSize: Int?,
     /** Cartas restantes en el mazo rival (null si no está disponible). */
     val opponentDeckSize: Int?,
+    /** Última tirada de dados de la partida (null si aún no hubo o no se conoce). */
+    val lastRoll: DiceRollEvent? = null,
 ) {
     /** true si la partida ha terminado. */
     val isFinished: Boolean get() = phase == MatchSnapshot.Phase.FINISHED
@@ -88,6 +91,8 @@ data class HandCardUi(
     val maxHealth: Int,
     val rarity: Rarity?,
     val isPassive: Boolean,
+    /** Efecto con sus dados, p. ej. "Daño 1d8+1". */
+    val effectLabel: String = "",
     /** true si la carta puede jugarse en este instante (turno + fase + mana + no congelado). */
     val playable: Boolean,
 )

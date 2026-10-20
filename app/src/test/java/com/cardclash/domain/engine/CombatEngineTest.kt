@@ -378,7 +378,7 @@ class CombatEngineTest {
     // 7) Ticks de estados sobre el avatar: BURN (fijo), POISON (fijo) y BLEED.
     // =====================================================================
     @Test
-    fun tickBurn_danioFijoAlAvatar() {
+    fun tickBurn_tira1d4AlAvatar() {
         val engine = CombatEngine(catalog(), SeededDiceRoller(7))
         val p = P1()
         val s0 = snapshot(
@@ -388,14 +388,14 @@ class CombatEngineTest {
         )
         // EndTurn dispara los ticks de estados sobre el avatar.
         val s1 = engine.applyAction(s0, CombatEngine.CombatAction.EndTurn).snapshot
-        // BURN hace 2 de daño fijo: 10 - 2 = 8.
-        assertEquals(8, s1.heroHealthOf(p))
+        // BURN tira 1d4: 10 - [1;4] -> [6;9].
+        assertTrue(s1.heroHealthOf(p) in 6..9)
         // Y consume un turno de duración: de 2 a 1.
         assertEquals(1, s1.heroStatusesOf(p).first().turnsRemaining)
     }
 
     @Test
-    fun tickPoison_danioFijoDe3AlAvatar() {
+    fun tickPoison_tira1d6AlAvatar() {
         val engine = CombatEngine(catalog(), SeededDiceRoller(1))
         val p = P1()
         val s0 = snapshot(
@@ -404,8 +404,8 @@ class CombatEngineTest {
             heroStatuses = mapOf(p to listOf(heroStatus(p, StatusType.POISON))),
         )
         val s1 = engine.applyAction(s0, CombatEngine.CombatAction.EndTurn).snapshot
-        // POISON hace 3 fijo: 10 - 3 = 7.
-        assertEquals(7, s1.heroHealthOf(p))
+        // POISON tira 1d6: 10 - [1;6] -> [4;9].
+        assertTrue(s1.heroHealthOf(p) in 4..9)
     }
 
     @Test

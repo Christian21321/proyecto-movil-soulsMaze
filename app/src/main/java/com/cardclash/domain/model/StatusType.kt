@@ -8,49 +8,47 @@ package com.cardclash.domain.model
  * tiempo real, que queda centralizado en [StatusInteractionRegistry].
  */
 enum class StatusType {
-    /** Daño constante cada turno (no depende del azar). */
+    /** Quemadura: 1d4 de daño cada turno. */
     BURN {
-        override val damageKind: DamageKind = DamageKind.FIXED
+        override val tickDice: DiceExpr? = DiceExpr(count = 1, sides = 4)
         override val ignoresDefense: Boolean = false
-        override val tickValue: Int = 2
     },
 
-    /** Daño constante cada turno que IGNORA la defensa. */
+    /** Veneno: 1d6 de daño cada turno que IGNORA la defensa. */
     POISON {
-        override val damageKind: DamageKind = DamageKind.FIXED
+        override val tickDice: DiceExpr? = DiceExpr(count = 1, sides = 6)
         override val ignoresDefense: Boolean = true
-        override val tickValue: Int = 3
     },
 
-    /** Daño aleatorio 1d3 cada turno (usa el DiceRoller). */
+    /** Sangrado: 1d3 + turnos que lleva activo (daño creciente). */
     BLEED {
-        override val damageKind: DamageKind = DamageKind.DICE_1D3
+        override val tickDice: DiceExpr? = DiceExpr(count = 1, sides = 3)
         override val ignoresDefense: Boolean = false
-        override val tickValue: Int = 0
+        override val escalates: Boolean = true
     },
 
-    /** Congelacion: salta el turno completo (no roba ni rellena mana). */
+    /**
+     * Congelacion: salta el turno completo (no roba ni rellena mana). El
+     * objetivo tira una salvación d20 contra [saveDc] al recibirla.
+     */
     FROST {
-        override val damageKind: DamageKind = DamageKind.NONE
+        override val tickDice: DiceExpr? = null
         override val ignoresDefense: Boolean = false
-        override val tickValue: Int = 0
+        override val saveDc: Int? = 12
     };
 
-    /** Forma en que el estado produce daño durante su tick. */
-    enum class DamageKind {
-        /** Daño fijo cada turno (BURN, POISON). */
-        FIXED,
-
-        /** Daño aleatorio 1d3 (BLEED), resuelto con el DiceRoller. */
-        DICE_1D3,
-
-        /** Sin daño directo en el tick (FROST). */
-        NONE,
-    }
-
-    abstract val damageKind: DamageKind
+    /** Dados de daño de cada tick, o null si el estado no hace daño. */
+    abstract val tickDice: DiceExpr?
     abstract val ignoresDefense: Boolean
-    abstract val tickValue: Int
+
+    /** true si al daño del tick se suman los turnos que lleva activo (BLEED). */
+    open val escalates: Boolean = false
+
+    /**
+     * Dificultad de la salvación d20 del objetivo: con un resultado >= [saveDc]
+     * resiste el estado. null = el estado se aplica siempre.
+     */
+    open val saveDc: Int? = null
 }
 
 /**

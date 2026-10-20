@@ -82,9 +82,10 @@ class HostSyncEngineTest {
         // y el mana se descuenta (1 - 1).
         assertTrue(processed2.state.snapshot.handOf(P1()).none { it == cardToPlay })
         assertEquals(0, processed2.state.snapshot.manaOf(P1()))
-        // El ataque golpea el avatar del rival dejandolo por debajo de su maximo.
+        // El ataque golpea el avatar del rival con la tirada de sus dados.
+        val roll = processed2.state.snapshot.lastRoll!!
         assertEquals(
-            MatchSnapshot.heroMaxHealthForLevel(MatchSnapshot.DEFAULT_HERO_LEVEL) - 3,
+            MatchSnapshot.heroMaxHealthForLevel(MatchSnapshot.DEFAULT_HERO_LEVEL) - roll.total,
             processed2.state.snapshot.heroHealthOf(P2()),
         )
 

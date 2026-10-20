@@ -27,16 +27,34 @@ El elemento diferenciador del proyecto es el sistema de **efectos de estado basa
 - **Sistema de estados con dados**: efectos como quemadura, congelación, sangrado o veneno tienen su activación y/o magnitud determinada por una tirada de dados de X caras.
 - **Interfaz de combate**: visualización de vida, mano, mazo restante y efectos activos de ambos jugadores.
 
-## Catálogo de estados (ejemplo inicial)
+## Dados D&D
+
+Las cartas usan dados de rol (d4, d6, d8, d10, d12 y d20) para resolver su efecto:
+
+- **Ataque y curación**: cada carta declara sus dados según su coste (p. ej. `Golpe 2: 1d8+1`, `Poción 1: 2d4`). Al jugarla se tira primero un **d20**:
+  - **20 natural → crítico**: se tiran el doble de dados.
+  - **1 natural → pifia**: la carta falla y no tiene efecto (el maná se gasta).
+  - Cualquier otro valor: se aplica la tirada normal.
+- **Estados**: los de daño tiran sus dados en cada turno y la Congelación permite al objetivo una **salvación d20 contra CD 12**.
+- La última tirada se muestra en una ventana durante el combate y todas quedan en el registro.
+
+| Carta | Coste | Dados |
+|---|---|---|
+| Golpe 0 / Golpe 1 | 1 | 1d4+1 / 1d6+1 |
+| Golpe 2 / Golpe 3 | 2 | 1d8+1 / 1d10+1 |
+| Golpe 4 / Golpe 5 | 3 | 1d12+1 / 2d6+1 |
+| Poción 0 / 1 / 2 | 1 / 2 / 2 | 1d6+1 / 2d4 / 1d8+2 |
+
+## Catálogo de estados
 
 | Estado | Efecto | Resolución por dado |
 |---|---|---|
-| Quemadura | Daño fijo por turno durante N turnos | 1d4 daño / turno |
-| Congelación | Probabilidad de perder el turno | 1d6 (5-6 pierde turno) |
-| Sangrado | Daño creciente por turno | 1d4 + turno actual |
-| Veneno | Daño fijo que ignora defensa | 1d4 fijo |
+| Quemadura | Daño por turno durante 2 turnos | 1d4 daño / turno |
+| Veneno | Daño por turno que ignora defensa | 1d6 daño / turno |
+| Sangrado | Daño creciente por turno | 1d3 + turnos activo |
+| Congelación | El objetivo pierde su siguiente turno | Salvación d20 CD 12 para resistirla |
 
->  Este catálogo es una primera propuesta y está sujeto a balanceo durante el desarrollo.
+>  Valores sujetos a balanceo durante el desarrollo.
 
 ##  Stack tecnológico
 

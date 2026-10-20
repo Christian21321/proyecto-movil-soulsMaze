@@ -30,6 +30,9 @@ object BotPolicy {
     /** Mano a partir de la cual robar no aporta valor. */
     private const val DRAW_HAND_THRESHOLD = 2
 
+    /** Valor de que el rival pierda un turno por FROST (si falla la salvación). */
+    private const val FROST_TURN_VALUE = 8
+
     fun nextPlay(snapshot: MatchSnapshot, bot: PlayerId, catalog: CardCatalog): Play? {
         if (snapshot.heroStatusesOf(bot).any { it.type == StatusType.FROST }) return null
         val opponent = snapshot.players.firstOrNull { it != bot } ?: return null
@@ -99,12 +102,15 @@ object BotPolicy {
         }
     }
 
-    /** Valor por turno de cada estado (daño medio; FROST equivale a un turno del rival). */
-    private fun statusValue(status: StatusType): Int = when (status) {
-        StatusType.BURN -> 2
-        StatusType.POISON -> 3
-        StatusType.BLEED -> 2
-        StatusType.FROST -> 8
+    /**
+     * Valor por turno de cada estado: daño medio de sus dados; FROST equivale a
+     * un turno del rival (8) por la probabilidad de que falle la salvación.
+     */
+    private fun statusValue(status: StatusType): Int {
+        val damage = status.tickDice?.averageRounded ?: FROST_TURN_VALUE
+        val dc = status.saveDc ?: return damage
+        val failChance = (dc - 1) / 20.0
+        return Math.round(damage * failChance).toInt()
     }
 
     private fun targetOf(card: Card, bot: PlayerId, opponent: PlayerId): PlayerId? = when (card.effect) {
