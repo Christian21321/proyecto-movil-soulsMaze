@@ -57,6 +57,7 @@ object CombatReducer {
                 maxHealth = card?.maxHealth ?: 0,
                 rarity = cardId?.let(catalog::rarityOf),
                 isPassive = card?.isPassive ?: false,
+                effectLabel = card?.let(CardText::describeEffect) ?: "",
                 playable = playable,
             )
         }
@@ -81,6 +82,7 @@ object CombatReducer {
             winner = snapshot.winner,
             myDeckSize = snapshot.deckOf(myId).size,
             opponentDeckSize = snapshot.deckOf(opponent).size,
+            lastRoll = snapshot.lastRoll,
         )
     }
 
@@ -129,6 +131,7 @@ object CombatReducer {
                 maxHealth = card?.maxHealth ?: 0,
                 rarity = cardId?.let(catalog::rarityOf),
                 isPassive = card?.isPassive ?: false,
+                effectLabel = card?.let(CardText::describeEffect) ?: "",
                 playable = playable,
             )
         }

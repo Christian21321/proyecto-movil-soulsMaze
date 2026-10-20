@@ -68,8 +68,8 @@ class BotPolicyTest {
 
     @Test
     fun golpeLetal_tienePrioridad() {
-        val s = snapshot(listOf("attack-5", "attack-0", "attack-1"), mana = 3, myHealth = 4)
-        // attack-1 (4 de daño, coste 1) basta para ganar.
+        val s = snapshot(listOf("attack-5", "attack-0", "attack-1"), mana = 3, myHealth = 5)
+        // attack-1 (1d6+1, media 5, coste 1) basta para ganar; attack-0 (media 4) no.
         assertEquals("attack-1" to me, play(s))
     }
 

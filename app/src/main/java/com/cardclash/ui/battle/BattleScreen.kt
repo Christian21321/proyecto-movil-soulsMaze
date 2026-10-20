@@ -54,15 +54,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cardclash.di.AppContainer
 import com.cardclash.domain.battle.CombatSessionState
 import com.cardclash.domain.battle.CombatUiState
+import com.cardclash.domain.battle.DiceRollText
 import com.cardclash.domain.battle.HandCardUi
 import com.cardclash.domain.battle.SessionRole
 import com.cardclash.domain.battle.SessionStatus
 import com.cardclash.domain.model.CardId
+import com.cardclash.domain.model.DiceRollEvent
 import com.cardclash.domain.model.InstanceId
 import com.cardclash.domain.model.MatchId
 import com.cardclash.domain.model.MatchSnapshot
 import com.cardclash.domain.model.PlayerId
 import com.cardclash.domain.model.Rarity
+import com.cardclash.domain.model.RollOutcome
 import com.cardclash.ui.common.RarityBadge
 import kotlinx.coroutines.delay
 import com.cardclash.ui.theme.CardClashTheme
@@ -199,6 +202,7 @@ private fun BattleArena(
             )
         }
         TurnBanner(ui = ui)
+        DiceRollBanner(roll = ui.lastRoll, myId = ui.myId)
     }
 }
 
@@ -432,10 +436,12 @@ private fun HandCard(card: HandCardUi, onTap: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "${card.attack} ATK / ${card.maxHealth} PV",
+                text = card.effectLabel,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             if (card.isPassive) {
                 Text(
@@ -501,6 +507,70 @@ private fun TurnBanner(ui: CombatUiState) {
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 28.dp, vertical = 14.dp),
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Ventana con la última tirada de dados (ataque, curación o salvación). Aparece
+ * en el centro cada vez que cambia [DiceRollEvent.sequence] y se oculta sola.
+ * El color resalta críticos (verde) y pifias (rojo).
+ */
+@Composable
+private fun DiceRollBanner(roll: DiceRollEvent?, myId: PlayerId) {
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(roll?.sequence) {
+        if (roll == null) return@LaunchedEffect
+        visible = true
+        delay(2200)
+        visible = false
+    }
+    if (roll == null) return
+
+    val color = when (roll.outcome) {
+        RollOutcome.CRITICAL, RollOutcome.SAVED -> VictoryColor
+        RollOutcome.FUMBLE -> DefeatColor
+        else -> MaterialTheme.colorScheme.tertiary
+    }
+    val title = DiceRollText.title(roll, myId)
+    val detail = DiceRollText.detail(roll)
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visible = visible,
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = 24.dp),
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut(),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = color,
+                contentColor = Color.White,
+                shadowElevation = 8.dp,
+                modifier = Modifier.semantics { contentDescription = "Tirada: $title. $detail" },
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = "🎲 ${roll.total}",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = detail,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
     }
@@ -671,11 +741,12 @@ private fun sampleUi(): CombatUiState = CombatUiState(
             instanceId = InstanceId("0"),
             cardId = CardId("attack-0"),
             name = "Golpe 0",
-            cost = 3,
-            attack = 3,
+            cost = 1,
+            attack = 5,
             maxHealth = 4,
             rarity = Rarity.COMMON,
             isPassive = false,
+            effectLabel = "Daño 1d4+1",
             playable = true,
         ),
         HandCardUi(
@@ -687,6 +758,7 @@ private fun sampleUi(): CombatUiState = CombatUiState(
             maxHealth = 3,
             rarity = Rarity.SSR,
             isPassive = false,
+            effectLabel = "FROST (1 turno, salvación CD 12)",
             playable = false,
         ),
     ),

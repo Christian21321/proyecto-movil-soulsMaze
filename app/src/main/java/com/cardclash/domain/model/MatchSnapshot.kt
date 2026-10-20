@@ -22,6 +22,7 @@ package com.cardclash.domain.model
  * - [passives]: modificadores pasivos permanentes vinculados a cada avatar.
  * - [manas]: mana actual de cada jugador.
  * - [players]: orden y metadatos de los jugadores.
+ * - [lastRoll]: última tirada de dados (ataque, curación o salvación).
  * - [playedCardLastTurn]: mapa que guarda, por jugador, si jugó una carta en su
  *   turno anterior (afecta al robo del turno siguiente).
  *
@@ -57,6 +58,8 @@ data class MatchSnapshot(
     val cardOf: Map<InstanceId, CardId> = emptyMap(),
     val winner: PlayerId? = null,
     val log: List<String> = emptyList(),
+    /** Última tirada de dados resuelta (para mostrarla en la UI), o null. */
+    val lastRoll: DiceRollEvent? = null,
 ) {
     /** Fases del flujo de partida. */
     enum class Phase {

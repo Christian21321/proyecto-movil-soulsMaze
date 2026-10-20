@@ -3,6 +3,7 @@ package com.cardclash.ui.deckbuilder
 import com.cardclash.data.local.model.Deck
 import com.cardclash.data.local.model.DeckCard
 import com.cardclash.data.local.model.DeckId
+import com.cardclash.domain.battle.CardText
 import com.cardclash.domain.model.Card
 import com.cardclash.domain.model.CardEffect
 import com.cardclash.domain.model.CardId
@@ -155,20 +156,7 @@ object DeckBuilderMapper {
         }
     }
 
-    fun describeEffect(card: Card): String {
-        if (card.isPassive) {
-            val stat = card.passiveStat?.name ?: ""
-            return "Pasiva: $stat ${if (card.passiveAmount > 0) "+" else ""}${card.passiveAmount}"
-        }
-        return when (val effect = card.effect) {
-            is CardEffect.Attack -> "Daño ${effect.amount}"
-            is CardEffect.Heal -> "Cura ${effect.amount}"
-            is CardEffect.Draw -> "Roba ${effect.count}"
-            is CardEffect.ApplyStatus -> "${effect.status.name} (${effect.durationTurns} turnos)"
-            is CardEffect.PassiveBuff -> "${effect.stat.name} +${effect.amount}"
-            is CardEffect.None -> "Sin efecto"
-        }
-    }
+    fun describeEffect(card: Card): String = CardText.describeEffect(card)
 
     private fun emptySlots(): List<DeckSlotUi> =
         (0..DeckBuilderUiState.PASSIVE_SLOT_INDEX).map { index ->

@@ -3,6 +3,7 @@ package com.cardclash.domain.engine
 import com.cardclash.domain.model.Card
 import com.cardclash.domain.model.CardEffect
 import com.cardclash.domain.model.CardId
+import com.cardclash.domain.model.DiceExpr
 import com.cardclash.domain.model.Rarity
 import com.cardclash.domain.model.StatusType
 import com.cardclash.domain.model.UnitStat
@@ -14,8 +15,8 @@ import com.cardclash.domain.repository.CardCatalog
  * Sirve de implementación de referencia de [CardCatalog] y proporciona cartas
  * de ejemplo que cubren todos los [CardEffect] del dominio. Tras el rediseño de
  * Fase 1 (sin unidades), los efectos apuntan siempre al AVATAR:
- * - ataques directos al avatar ([CardEffect.Attack]),
- * - curación del avatar ([CardEffect.Heal]),
+ * - ataques directos al avatar ([CardEffect.Attack]) con dados D&D,
+ * - curación del avatar ([CardEffect.Heal]) con dados D&D,
  * - robo ([CardEffect.Draw]),
  * - imposición de estados al avatar (BURN, POISON, BLEED, FROST),
  * - pasivas de mana vinculadas al avatar ([CardEffect.PassiveBuff] sobre MAX_MANA).
@@ -36,10 +37,11 @@ class DefaultCardCatalog : CardCatalog {
         addAll(List(3) { i -> baseDraw(i) })
 
         // --- Cartas de estados (una por tipo) ---
-        // Los estados de daño duran 2 turnos (BURN 2x2=4, POISON 3x2=6, BLEED
-        // 1d3x2 ~4) y cuestan como un ataque directo de daño parecido. FROST
-        // dura 1 turno: el rival salta un turno y juega el siguiente, de modo
-        // que no se puede encadenar un bloqueo permanente.
+        // Los estados de daño duran 2 turnos (BURN 1d4x2 ~5, POISON 1d6x2 ~7,
+        // BLEED 1d3 + 1d3+1 ~5) y cuestan como un ataque directo de daño
+        // parecido. FROST dura 1 turno (salvación d20 CD 12 del rival): el rival
+        // salta un turno y juega el siguiente, de modo que no se puede encadenar
+        // un bloqueo permanente.
         add(statusCard(StatusType.BURN, cost = 2))
         add(statusCard(StatusType.POISON, cost = 3))
         add(statusCard(StatusType.BLEED, cost = 2))
@@ -67,29 +69,33 @@ class DefaultCardCatalog : CardCatalog {
 
     /**
      * Carta de ataque base genérica: inflige [CardEffect.Attack] directo al
-     * avatar rival. [attack]/[maxHealth] se conservan por compatibilidad pero ya
-     * no representan una unidad en tablero.
+     * avatar rival tirando sus dados. [attack]/[maxHealth] se conservan por
+     * compatibilidad pero ya no representan una unidad en tablero ([attack] es
+     * el daño máximo de la tirada normal).
      *
-     * Coste proporcional al daño: daño = 2 x coste + 1 o + 2 (coste 1 -> 3-4,
-     * coste 2 -> 5-6, coste 3 -> 7-8).
+     * Dado según el coste, con daño medio = 2 x coste + 1.5 a 3 (coste 1 ->
+     * 1d4+1 / 1d6+1, coste 2 -> 1d8+1 / 1d10+1, coste 3 -> 1d12+1 / 2d6+1).
      */
-    private fun baseAttack(i: Int): Card = Card(
-        id = CardId("attack-$i"),
-        name = "Golpe $i",
-        cost = 1 + i / 2,
-        attack = 3 + i,
-        maxHealth = 4 + i,
-        effect = CardEffect.Attack(amount = 3 + i),
-    )
+    private fun baseAttack(i: Int): Card {
+        val dice = ATTACK_DICE[i]
+        return Card(
+            id = CardId("attack-$i"),
+            name = "Golpe $i",
+            cost = 1 + i / 2,
+            attack = dice.max,
+            maxHealth = 4 + i,
+            effect = CardEffect.Attack(dice),
+        )
+    }
 
-    /** Carta de curación base genérica: cura el avatar objetivo (4 por 1, 5-6 por 2). */
+    /** Carta de curación base genérica: cura el avatar objetivo tirando sus dados. */
     private fun baseHeal(i: Int): Card = Card(
         id = CardId("heal-$i"),
         name = "Poción $i",
         cost = 1 + (i + 1) / 2,
         attack = 1,
         maxHealth = 3,
-        effect = CardEffect.Heal(amount = 4 + i),
+        effect = CardEffect.Heal(HEAL_DICE[i]),
     )
 
     /** Carta de robo base genérica: 1 mana por carta robada. */
@@ -136,6 +142,23 @@ class DefaultCardCatalog : CardCatalog {
     override fun rarityOf(id: CardId): Rarity? = rarityById[id]
 
     companion object {
+        /** Dados de cada carta de ataque (`attack-0` .. `attack-5`). */
+        private val ATTACK_DICE: List<DiceExpr> = listOf(
+            DiceExpr(1, 4, 1),
+            DiceExpr(1, 6, 1),
+            DiceExpr(1, 8, 1),
+            DiceExpr(1, 10, 1),
+            DiceExpr(1, 12, 1),
+            DiceExpr(2, 6, 1),
+        )
+
+        /** Dados de cada carta de curación (`heal-0` .. `heal-2`). */
+        private val HEAL_DICE: List<DiceExpr> = listOf(
+            DiceExpr(1, 6, 1),
+            DiceExpr(2, 4),
+            DiceExpr(1, 8, 2),
+        )
+
         /** Duración de los estados de daño (BURN, POISON, BLEED). */
         const val STATUS_DURATION_TURNS: Int = 2
 

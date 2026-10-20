@@ -26,13 +26,21 @@ class CatalogBalanceTest {
     private fun card(id: String) = catalog.findById(CardId(id))!!
 
     @Test
-    fun ataques_danioProporcionalAlCoste() {
+    fun ataques_danioMedioProporcionalAlCoste() {
         catalog.all().filter { it.effect is CardEffect.Attack }.forEach { card ->
-            val damage = (card.effect as CardEffect.Attack).amount
+            val dice = (card.effect as CardEffect.Attack).dice
+            assertTrue("${card.id}: el ataque debe tirar dados", dice.isRandom)
             assertTrue(
-                "${card.id}: daño $damage con coste ${card.cost}",
-                damage in (2 * card.cost + 1)..(2 * card.cost + 2),
+                "${card.id}: daño medio ${dice.average} con coste ${card.cost}",
+                dice.average in (2.0 * card.cost + 1.5)..(2.0 * card.cost + 3.0),
             )
+        }
+    }
+
+    @Test
+    fun curaciones_tiranDados() {
+        catalog.all().mapNotNull { it.effect as? CardEffect.Heal }.forEach { heal ->
+            assertTrue("${heal.dice}", heal.dice.isRandom)
         }
     }
 

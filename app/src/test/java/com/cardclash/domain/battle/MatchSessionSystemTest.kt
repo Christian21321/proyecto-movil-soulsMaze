@@ -8,6 +8,7 @@ import com.cardclash.data.remote.sync.HostSyncState
 import com.cardclash.data.remote.sync.MatchAction
 import com.cardclash.domain.engine.CombatEngine
 import com.cardclash.domain.engine.DefaultCardCatalog
+import com.cardclash.domain.engine.DiceRoller
 import com.cardclash.domain.engine.SeededDiceRoller
 import com.cardclash.domain.model.CardId
 import com.cardclash.domain.model.InstanceId
@@ -45,6 +46,15 @@ class MatchSessionSystemTest {
 
     private fun catalog(): CardCatalog = DefaultCardCatalog()
     private fun engine(): CombatEngine = CombatEngine(DefaultCardCatalog(), SeededDiceRoller(42))
+
+    /** Motor cuyo d20 siempre saca 1: el rival nunca supera la salvación de FROST. */
+    private fun engineFailingSaves(): CombatEngine {
+        val seeded = SeededDiceRoller(42)
+        val roller = object : DiceRoller by seeded {
+            override fun d(sides: Int): Int = if (sides == 20) 1 else seeded.d(sides)
+        }
+        return CombatEngine(DefaultCardCatalog(), roller)
+    }
 
     /** Mazo agresivo (ataque barato y alto) para que la demo finalice rápido. */
     private fun aggroDeck(): List<CardId> = List(12) { CardId("attack-5") }
@@ -146,7 +156,7 @@ class MatchSessionSystemTest {
     @Test
     fun localDemo_frostEnAvatarDelRival_leHaceSaltarElTurno() = runBlocking {
         val ctl = MatchSessionController(
-            myId = me, engine = engine(), catalog = catalog(),
+            myId = me, engine = engineFailingSaves(), catalog = catalog(),
             gateway = FakeGateway(me, opponent), resultSink = FakeSink(), scope = this,
             maxLogLines = 50,
         )

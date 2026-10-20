@@ -4,12 +4,16 @@ import com.cardclash.domain.model.ActiveStatus
 import com.cardclash.domain.model.Card
 import com.cardclash.domain.model.CardEffect
 import com.cardclash.domain.model.CardId
+import com.cardclash.domain.model.DiceExpr
+import com.cardclash.domain.model.DiceRollEvent
 import com.cardclash.domain.model.InstanceId
 import com.cardclash.domain.model.MatchId
 import com.cardclash.domain.model.MatchResult
 import com.cardclash.domain.model.MatchSnapshot
 import com.cardclash.domain.model.PassiveBonus
 import com.cardclash.domain.model.PlayerId
+import com.cardclash.domain.model.RollKind
+import com.cardclash.domain.model.RollOutcome
 import com.cardclash.domain.model.StatusDecay
 import com.cardclash.domain.model.StatusInteractionRegistry
 import com.cardclash.domain.model.StatusInstanceId
@@ -26,8 +30,9 @@ import com.cardclash.domain.repository.CardCatalog
  *   estado.
  * - La aleatoriedad se inyecta por [DiceRoller]; el motor JAMÁS crea un `Random`
  *   interno. Con [KotlinRandomDiceRoller] en producción y [SeededDiceRoller]
- *   (determinista) en tests. El roller decide las tiradas de BLEED (1d3), el
- *   barajado inicial de los mazos y el re-barajado del mazo circular.
+ *   (determinista) en tests. El roller decide las tiradas de dados de las
+ *   cartas y los estados, el barajado inicial de los mazos y el re-barajado
+ *   del mazo circular.
  * - Las reglas de juego están separadas en pasos bien localizados: inicio de
  *   turno, robo, relleno de mana, juego de carta, fin de turno, victoria.
  *
@@ -40,6 +45,18 @@ import com.cardclash.domain.repository.CardCatalog
  * - Las pasivas (MAX_MANA, etc.) se vinculan al avatar ([MatchSnapshot.passives]).
  * - Condición de victoria: vida del avatar a 0 (gana el otro jugador,
  *   [WinReason.OPPONENT_DEFEATED]).
+ *
+ * # Dados D&D
+ * - Las cartas de ataque y curación declaran sus dados ([DiceExpr], p. ej.
+ *   1d8+1). Al jugarlas se tira primero un d20: con 20 natural es CRÍTICO (se
+ *   tiran el doble de dados), con 1 natural es PIFIA (la carta falla y se pierde
+ *   el mana); con cualquier otro valor se aplica la tirada normal. Los efectos
+ *   fijos (sin dados) no tiran d20.
+ * - Los estados de daño tiran sus dados en cada tick (BURN 1d4, POISON 1d6,
+ *   BLEED 1d3 + turnos activo).
+ * - Los estados con [StatusType.saveDc] (FROST, CD 12) permiten al objetivo una
+ *   salvación d20: con un resultado >= CD el estado no se aplica.
+ * - La última tirada queda en [MatchSnapshot.lastRoll] para que la UI la muestre.
  *
  * # Reglas de robo (tope de mano = 4)
  * - Mano inicial por defecto = 3.
@@ -54,7 +71,7 @@ import com.cardclash.domain.repository.CardCatalog
  *   `turnsRemaining = durationTurns`. El inicio de turno no refresca nada: los
  *   estados TIMED pierden 1 turno en cada fin de turno de su portador y expiran
  *   al llegar a 0.
- * - Ticks de estados sobre el avatar: BURN/POISON fijos, BLEED 1d3 con el roller.
+ * - Ticks de estados sobre el avatar: dados de [StatusType.tickDice] con el roller.
  * - Mana relleno a [MatchSnapshot.effectiveMaxMana]: curva creciente (1 en el
  *   primer turno propio, +1 por turno hasta 10) + pasivas MAX_MANA.
  * - Curación con tope en la vida máxima del avatar.
@@ -293,17 +310,24 @@ class CombatEngine(
         snapshot.players.first { it != player }
 
     /**
-     * Aplica el "tick" de los estados del avatar de [player].
-     * BURN/POISON: daño fijo; BLEED: 1d3 con el roller. La vida del avatar se
-     * reduce sin bajar de 0.
+     * Aplica el "tick" de los estados del avatar de [player]: cada estado tira
+     * sus [StatusType.tickDice] con el roller (BLEED suma los turnos que lleva
+     * activo). La vida del avatar se reduce sin bajar de 0.
      */
     private fun applyHeroStatusTicks(snapshot: MatchSnapshot, player: PlayerId): MatchSnapshot {
         var health = snapshot.heroHealthOf(player)
+        val tickLog = mutableListOf<String>()
         val updated = snapshot.heroStatusesOf(player).map { st ->
-            val damage = when (st.type.damageKind) {
-                StatusType.DamageKind.FIXED -> st.type.tickValue
-                StatusType.DamageKind.DICE_1D3 -> diceRoller.d(3)
-                StatusType.DamageKind.NONE -> 0
+            val dice = st.type.tickDice
+            val damage = if (dice == null) {
+                0
+            } else {
+                val elapsed = if (st.type.escalates) st.durationTurns - st.turnsRemaining else 0
+                val faces = List(dice.count) { diceRoller.d(dice.sides) }
+                val total = (faces.sum() + dice.bonus + elapsed).coerceAtLeast(0)
+                val extra = if (elapsed > 0) " +$elapsed" else ""
+                tickLog += "$player sufre ${st.type.name}: $dice$extra → $total de daño."
+                total
             }
             if (damage > 0) {
                 // El avatar no tiene defensa por estados en esta versión; el daño
@@ -319,6 +343,7 @@ class CombatEngine(
         return snapshot.copy(
             heroHealth = snapshot.heroHealth + (player to health),
             heroStatuses = snapshot.heroStatuses + (player to alive),
+            log = snapshot.log + tickLog,
         )
     }
 
@@ -357,12 +382,21 @@ class CombatEngine(
         when (val e = card.effect) {
             is CardEffect.None -> Unit
 
-            is CardEffect.Attack ->
-                working = dealDamageToAvatar(working, opponentOf(working, player), e.amount)
+            is CardEffect.Attack -> {
+                val (rolled, amount) = rollEffect(working, player, card, e.dice, RollKind.ATTACK)
+                working = rolled
+                if (amount != null) {
+                    working = dealDamageToAvatar(working, opponentOf(working, player), amount)
+                }
+            }
 
             is CardEffect.Heal -> {
                 val target = targetPlayer ?: player
-                working = healAvatar(working, target, e.amount)
+                val (rolled, amount) = rollEffect(working, player, card, e.dice, RollKind.HEAL)
+                working = rolled
+                if (amount != null) {
+                    working = healAvatar(working, target, amount)
+                }
             }
 
             is CardEffect.Draw -> {
@@ -381,13 +415,118 @@ class CombatEngine(
 
             is CardEffect.ApplyStatus -> {
                 val target = targetPlayer ?: opponentOf(working, player)
-                working = applyStatusToAvatar(working, target, e.status, e.durationTurns)
+                val (rolled, saved) = rollSave(working, target, card, e.status)
+                working = rolled
+                if (!saved) {
+                    working = applyStatusToAvatar(working, target, e.status, e.durationTurns)
+                }
             }
 
             is CardEffect.PassiveBuff -> Unit
         }
         return working
     }
+
+    /**
+     * Tira los [dice] de una carta de ataque/curación jugada por [player].
+     *
+     * Con dados: primero un d20 (20 natural = crítico, doble de dados; 1 natural
+     * = pifia, sin efecto) y luego los dados de efecto. Registra la tirada en el
+     * log y en [MatchSnapshot.lastRoll]. Sin dados (efecto fijo) no tira nada.
+     *
+     * @return el snapshot con la tirada registrada y la cantidad a aplicar, o
+     *   null si la carta falla por pifia.
+     */
+    private fun rollEffect(
+        snapshot: MatchSnapshot,
+        player: PlayerId,
+        card: Card,
+        dice: DiceExpr,
+        kind: RollKind,
+    ): Pair<MatchSnapshot, Int?> {
+        if (!dice.isRandom) return snapshot to dice.min
+
+        val d20 = diceRoller.d(DiceExpr.D20)
+        val outcome = when (d20) {
+            DiceExpr.D20 -> RollOutcome.CRITICAL
+            1 -> RollOutcome.FUMBLE
+            else -> RollOutcome.HIT
+        }
+        val diceCount = if (outcome == RollOutcome.CRITICAL) dice.count * 2 else dice.count
+        val faces = if (outcome == RollOutcome.FUMBLE) {
+            emptyList()
+        } else {
+            List(diceCount) { diceRoller.d(dice.sides) }
+        }
+        val total = if (outcome == RollOutcome.FUMBLE) 0 else (faces.sum() + dice.bonus).coerceAtLeast(0)
+        val message = when (outcome) {
+            RollOutcome.FUMBLE -> "$player saca un 1 natural en el d20: ¡pifia! '${card.name}' falla."
+            RollOutcome.CRITICAL ->
+                "$player saca un 20 natural: ¡crítico! '${card.name}' tira ${diceCount}d${dice.sides}" +
+                    "${bonusText(dice.bonus)} → ${rollText(faces, dice.bonus)} = $total."
+            else ->
+                "$player tira $dice con '${card.name}' (d20: $d20) → ${rollText(faces, dice.bonus)} = $total."
+        }
+        val event = DiceRollEvent(
+            sequence = nextRollSequence(snapshot),
+            roller = player,
+            cardName = card.name,
+            kind = kind,
+            expression = dice.toString(),
+            d20 = d20,
+            faces = faces,
+            total = total,
+            outcome = outcome,
+        )
+        val rolled = snapshot.copy(log = snapshot.log + message, lastRoll = event)
+        return rolled to if (outcome == RollOutcome.FUMBLE) null else total
+    }
+
+    /**
+     * Salvación d20 de [target] contra el [status] de una carta. Si el estado no
+     * tiene [StatusType.saveDc] no se tira nada y el estado se aplica.
+     *
+     * @return el snapshot con la tirada registrada y true si el objetivo resiste.
+     */
+    private fun rollSave(
+        snapshot: MatchSnapshot,
+        target: PlayerId,
+        card: Card,
+        status: StatusType,
+    ): Pair<MatchSnapshot, Boolean> {
+        val dc = status.saveDc ?: return snapshot to false
+        val d20 = diceRoller.d(DiceExpr.D20)
+        val saved = d20 >= dc
+        val message = if (saved) {
+            "$target supera la salvación contra ${status.name} (d20: $d20 ≥ CD $dc) y la resiste."
+        } else {
+            "$target falla la salvación contra ${status.name} (d20: $d20 < CD $dc)."
+        }
+        val event = DiceRollEvent(
+            sequence = nextRollSequence(snapshot),
+            roller = target,
+            cardName = card.name,
+            kind = RollKind.SAVE,
+            expression = "d20 CD $dc",
+            d20 = d20,
+            faces = emptyList(),
+            total = d20,
+            outcome = if (saved) RollOutcome.SAVED else RollOutcome.NOT_SAVED,
+        )
+        return snapshot.copy(log = snapshot.log + message, lastRoll = event) to saved
+    }
+
+    private fun nextRollSequence(snapshot: MatchSnapshot): Int = (snapshot.lastRoll?.sequence ?: 0) + 1
+
+    private fun bonusText(bonus: Int): String = when {
+        bonus > 0 -> "+$bonus"
+        bonus < 0 -> "$bonus"
+        else -> ""
+    }
+
+    /** Detalle de una tirada: "3+5+1" (caras + bonus). */
+    private fun rollText(faces: List<Int>, bonus: Int): String =
+        faces.joinToString("+") + bonusText(bonus)
 
     /** Inflige [amount] de daño directo a la vida del avatar de [player]. */
     private fun dealDamageToAvatar(

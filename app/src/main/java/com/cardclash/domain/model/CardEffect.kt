@@ -13,19 +13,36 @@ sealed class CardEffect {
     data object None : CardEffect()
 
     /**
-     * Aplica daño [amount] directamente a la vida del AVATAR del rival.
+     * Aplica daño directamente a la vida del AVATAR del rival. El daño es la
+     * tirada de [dice] (p. ej. 1d8+1); con dados, el motor tira además un d20 de
+     * crítico (20 natural = doble de dados, 1 natural = la carta falla).
      * Ya no existen unidades de tablero a las que golpear.
      */
-    data class Attack(val amount: Int) : CardEffect() {
+    data class Attack(val dice: DiceExpr) : CardEffect() {
+        /** Daño fijo, sin dados ni d20. */
+        constructor(amount: Int) : this(DiceExpr.fixed(amount))
+
+        /** Daño medio (exacto si es fijo). */
+        val amount: Int get() = dice.averageRounded
+
         init {
-            require(amount >= 0) { "El danio de Attack no puede ser negativo" }
+            require(dice.min >= 0) { "El danio de Attack no puede ser negativo" }
         }
     }
 
-    /** Cura [amount] puntos de vida al AVATAR objetivo (con tope en su vida máxima). */
-    data class Heal(val amount: Int) : CardEffect() {
+    /**
+     * Cura la tirada de [dice] al AVATAR objetivo (con tope en su vida máxima).
+     * Con dados aplica la misma regla de crítico/pifia con d20 que [Attack].
+     */
+    data class Heal(val dice: DiceExpr) : CardEffect() {
+        /** Curación fija, sin dados ni d20. */
+        constructor(amount: Int) : this(DiceExpr.fixed(amount))
+
+        /** Curación media (exacta si es fija). */
+        val amount: Int get() = dice.averageRounded
+
         init {
-            require(amount >= 0) { "La curacion no puede ser negativa" }
+            require(dice.min >= 0) { "La curacion no puede ser negativa" }
         }
     }
 
